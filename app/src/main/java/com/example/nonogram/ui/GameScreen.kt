@@ -1,15 +1,21 @@
 package com.example.nonogram.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.nonogram.domain.entity.CellState
@@ -17,101 +23,152 @@ import com.example.nonogram.domain.entity.Game
 
 @Composable
 fun GameScreen(game: Game) {
+
     val board = game.board
+
     var playerGrid by remember {
         mutableStateOf(board.getPlayerGrid().map { it.copyOf() }.toTypedArray())
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        // Сетка 25x25
-        for (row in playerGrid.indices) {
-            Row {
-                for (col in playerGrid[row].indices) {
-                    CellView(
-                        state = playerGrid[row][col],
-                        row = row,
-                        col = col,
-                        onClick = {
-                            // Меняем состояние по клику
-                            val newState = when (playerGrid[row][col]) {
-                                CellState.EMPTY -> CellState.MARKED
-                                CellState.MARKED -> CellState.FILLED
-                                CellState.FILLED -> CellState.EMPTY
-                            }
+    val cellSize = 32.dp
+    val gridSize = playerGrid.size
 
-                            game.makeMove(row, col, newState)
-                            playerGrid = board.getPlayerGrid()
-                                .map { it.copyOf() }
-                                .toTypedArray()
+    val density = LocalDensity.current
+    val cellPx = with(density) { cellSize.toPx() }
+
+    // режим текущего свайпа
+    var dragState by remember { mutableStateOf<CellState?>(null) }
+
+    fun getCell(offset: Offset): Pair<Int, Int>? {
+
+        val col = (offset.x / cellPx).toInt()
+        val row = (offset.y / cellPx).toInt()
+
+        if (row !in playerGrid.indices || col !in playerGrid.indices) return null
+
+        return row to col
+    }
+
+    fun applyMove(row: Int, col: Int) {
+
+        val state = dragState ?: return
+
+        game.makeMove(row, col, state)
+
+        playerGrid = board.getPlayerGrid()
+            .map { it.copyOf() }
+            .toTypedArray()
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+
+        Canvas(
+            modifier = Modifier
+                .size(cellSize * gridSize)
+                .pointerInput(Unit) {
+
+                    detectDragGestures(
+
+                        onDragStart = { offset ->
+                            val cell = getCell(offset)
+
+                            cell?.let { (row, col) ->
+
+                                val current = playerGrid[row][col]
+
+                                dragState = when (current) {
+                                    CellState.EMPTY -> CellState.MARKED
+                                    CellState.MARKED -> CellState.FILLED
+                                    CellState.FILLED -> CellState.EMPTY
+                                }
+
+                                applyMove(row, col)
+                            }
                         },
+
+                        onDrag = { change, _ ->
+                            val cell = getCell(change.position)
+
+                            cell?.let { (row, col) ->
+                                applyMove(row, col)
+                            }
+                        },
+
+                        onDragEnd = {
+                            dragState = null
+                        }
                     )
                 }
+        ) {
+
+            val grid = playerGrid
+
+            // клетки
+            for (row in grid.indices) {
+                for (col in grid[row].indices) {
+
+                    val left = col * cellPx
+                    val top = row * cellPx
+
+                    val color = when (grid[row][col]) {
+                        CellState.EMPTY -> Color.White
+                        CellState.FILLED -> Color.Black
+                        CellState.MARKED -> Color.White
+                    }
+
+                    drawRect(
+                        color = color,
+                        topLeft = Offset(left, top),
+                        size = Size(cellPx, cellPx)
+                    )
+
+                    if (grid[row][col] == CellState.MARKED) {
+
+                        val pad = cellPx * 0.2f
+
+                        drawLine(
+                            color = Color.Red,
+                            start = Offset(left + pad, top + pad),
+                            end = Offset(left + cellPx - pad, top + cellPx - pad),
+                            strokeWidth = 3f
+                        )
+
+                        drawLine(
+                            color = Color.Red,
+                            start = Offset(left + cellPx - pad, top + pad),
+                            end = Offset(left + pad, top + cellPx - pad),
+                            strokeWidth = 3f
+                        )
+                    }
+                }
+            }
+
+            // сетка
+            for (i in 0..gridSize) {
+
+                val stroke = if (i % 5 == 0) 3f else 1f
+
+                drawLine(
+                    color = Color.Black,
+                    start = Offset(i * cellPx, 0f),
+                    end = Offset(i * cellPx, gridSize * cellPx),
+                    strokeWidth = stroke
+                )
+
+                drawLine(
+                    color = Color.Black,
+                    start = Offset(0f, i * cellPx),
+                    end = Offset(gridSize * cellPx, i * cellPx),
+                    strokeWidth = stroke
+                )
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text(text = game.getStatus())
+        Text(game.getStatus())
     }
 }
-
-@Composable
-fun CellView(state: CellState, row: Int, col: Int, onClick: () -> Unit) {
-    val color = when (state) {
-        CellState.EMPTY -> Color.White
-        CellState.FILLED -> Color.Black
-        CellState.MARKED -> Color.White
-    }
-
-    // Базовый бордер
-    var borderModifier = Modifier
-        .size(20.dp)
-        .border(1.dp, Color.Gray)
-
-    // Каждая 5-я строка/колонка — толстый чёрный бордер
-    if ((col + 1) % 5 == 0) {
-        borderModifier = borderModifier.border(2, Color.Black, right = true)
-    }
-    if ((row + 1) % 5 == 0) {
-        borderModifier = borderModifier.border(2, Color.Black, bottom = true)
-    }
-
-    Box(
-        modifier = borderModifier
-            .background(color)
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        if (state == CellState.MARKED) {
-            Text("✕", fontSize = 18.sp, color = Color.Red)
-        }
-    }
-}
-
-// Вспомогательный extension для частичных границ
-fun Modifier.border(width: Int, color: Color, right: Boolean = false, bottom: Boolean = false): Modifier {
-    return this.then(
-        Modifier.drawWithContent {
-            drawContent()
-            val strokeWidth = width.dp.toPx()
-            val w = size.width
-            val h = size.height
-
-            if (right) {
-                drawLine(color, start = androidx.compose.ui.geometry.Offset(w - strokeWidth / 2, 0f),
-                    end = androidx.compose.ui.geometry.Offset(w - strokeWidth / 2, h), strokeWidth)
-            }
-            if (bottom) {
-                drawLine(color, start = androidx.compose.ui.geometry.Offset(0f, h - strokeWidth / 2),
-                    end = androidx.compose.ui.geometry.Offset(w, h - strokeWidth / 2), strokeWidth)
-            }
-        }
-    )
-}
-
-
-
