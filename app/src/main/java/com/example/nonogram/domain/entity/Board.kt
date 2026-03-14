@@ -2,7 +2,7 @@ package com.example.nonogram.domain.entity
 
 class Board( private val solution: Array<BooleanArray>) {
     private val playerGrid: Array<Array<CellState>> =
-        Array(solution.size) { Array(solution.size) { CellState.EMPTY } }
+        Array(solution.size) { Array(solution[0].size) { CellState.EMPTY } }
 
     var remainingFilledCells: Int = 0
         private set
@@ -22,7 +22,7 @@ class Board( private val solution: Array<BooleanArray>) {
      * Vrátí false, pokud je tah chybný.
      */
     fun checkMove(x: Int, y: Int, state: CellState): Boolean {
-        if (x !in 0 until solution.size || y !in 0 until solution.size) return false
+        if (x !in 0 until solution[0].size || y !in 0 until solution.size) return false
 
         if (state == CellState.MARKED) {
             playerGrid[x][y] = state

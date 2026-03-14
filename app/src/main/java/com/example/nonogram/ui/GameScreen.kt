@@ -16,10 +16,12 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.nonogram.domain.entity.CellState
 import com.example.nonogram.domain.entity.Game
+import com.example.nonogram.ui.theme.NonogramTheme
 
 @Composable
 fun GameScreen(game: Game) {
@@ -30,7 +32,7 @@ fun GameScreen(game: Game) {
         mutableStateOf(board.getPlayerGrid().map { it.copyOf() }.toTypedArray())
     }
 
-    val cellSize = 32.dp
+    val cellSize = 15.dp
     val gridSize = playerGrid.size
 
     val density = LocalDensity.current
@@ -64,6 +66,8 @@ fun GameScreen(game: Game) {
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+
+        Spacer(modifier = Modifier.height(20.dp))
 
         Canvas(
             modifier = Modifier
@@ -121,8 +125,8 @@ fun GameScreen(game: Game) {
 
                     drawRect(
                         color = color,
-                        topLeft = Offset(left, top),
-                        size = Size(cellPx, cellPx)
+                        topLeft = Offset(left + 1f, top + 1f),
+                        size = Size(cellPx - 2f, cellPx - 2f)
                     )
 
                     if (grid[row][col] == CellState.MARKED) {
@@ -149,7 +153,7 @@ fun GameScreen(game: Game) {
             // сетка
             for (i in 0..gridSize) {
 
-                val stroke = if (i % 5 == 0) 3f else 1f
+                val stroke = if (i % 5 == 0) 5f else 2f
 
                 drawLine(
                     color = Color.Black,
@@ -170,5 +174,42 @@ fun GameScreen(game: Game) {
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(game.getStatus())
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun GameScreenPreview() {
+    val solution = arrayOf(
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+        booleanArrayOf(true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true),
+
+    )
+    val game = Game(solution)
+    NonogramTheme {
+        GameScreen(game = game)
     }
 }
