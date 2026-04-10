@@ -1,8 +1,10 @@
 package com.example.nonogram.data.storage
 
+import androidx.compose.ui.graphics.Color
+
 data class Block(
-    val cells: Array<IntArray>,
-    val usedColors: Set<Int>
+    val matrix: ArrayList<IntArray>,
+    val usedColors: List<Color>
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -10,14 +12,14 @@ data class Block(
 
         other as Block
 
-        if (!cells.contentDeepEquals(other.cells)) return false
+        if (matrix != other.matrix) return false
         if (usedColors != other.usedColors) return false
 
         return true
     }
 
     override fun hashCode(): Int {
-        var result = cells.contentDeepHashCode()
+        var result = matrix.hashCode()
         result = 31 * result + usedColors.hashCode()
         return result
     }

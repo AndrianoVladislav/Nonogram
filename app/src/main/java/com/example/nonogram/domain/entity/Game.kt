@@ -1,15 +1,19 @@
 package com.example.nonogram.domain.entity
 
-class Game(solution: Array<BooleanArray>) {
-    val board: Board = Board(solution)
+import com.example.nonogram.data.storage.Block
+
+class Game(solution: Block) {
+
+    val block = solution
+    val board: Board = Board(block)
     private var lives: Int = 3
     var isVictory: Boolean = false
         private set
 
-    fun makeMove(row: Int, col: Int, value: CellState) {
+    fun makeMove(row: Int, col: Int, selectedColor: Int, mode: InputMode) {
         if (lives <= 0) return
 
-        val correct = board.checkMove(row, col, value)
+        val correct = board.checkMove(row, col, selectedColor, mode)
 
         if (!correct) {
             lives--
@@ -24,10 +28,11 @@ class Game(solution: Array<BooleanArray>) {
                 println("🎉 Победа!")
             }
         }
+        print(" $col, $row ")
     }
 
     fun getStatus(): String {
-        return "Жизни: $lives, Оставшиеся клетки: ${board.remainingFilledCells}"
+        return "Жизни: $lives, Оставшиеся клетки: ${board.remainingCells}"
     }
 }
 

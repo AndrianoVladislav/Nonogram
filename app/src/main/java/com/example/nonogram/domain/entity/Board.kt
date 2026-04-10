@@ -1,68 +1,82 @@
 package com.example.nonogram.domain.entity
 
-class Board( private val solution: Array<BooleanArray>) {
-    private val playerGrid: Array<Array<CellState>> =
-        Array(solution.size) { Array(solution[0].size) { CellState.EMPTY } }
+import androidx.compose.runtime.mutableStateOf
+import com.example.nonogram.data.storage.Block
+import com.example.nonogram.data.storage.PlayerCell
 
-    var remainingFilledCells: Int = 0
+class Board(private val block: Block) {
+
+    private val size = block.matrix.size
+
+    private val playerGrid: Array<Array<PlayerCell>> =
+        Array(size) { Array(size) { PlayerCell() } }
+
+    var remainingCells: Int = 0
         private set
 
     init {
-        for (row in solution) {
-            for (cell in row) {
-                if (cell) remainingFilledCells++
+        remainingCells = size * size
+    }
+
+    fun checkMove(
+        row: Int,
+        col: Int,
+        selectedColor: Int,
+        mode: InputMode
+    ): Boolean {
+
+        val cell = playerGrid[row][col]
+
+        when (mode) {
+
+            InputMode.FILL -> {
+                return applyFill(cell, row, col, selectedColor)
+            }
+
+            InputMode.NOTE -> {
+                toggleNote(cell, selectedColor)
+                return true
             }
         }
     }
 
-    /**
-     * Hráč provede tah.
-     * Vrátí true, pokud je tah MARKED.
-     * Vrátí true, pokud je tah správný.
-     * Vrátí false, pokud je tah chybný.
-     */
-    fun checkMove(x: Int, y: Int, state: CellState): Boolean {
-        if (x !in 0 until solution[0].size || y !in 0 until solution.size) return false
+    private fun applyFill(
+        cell: PlayerCell,
+        row: Int,
+        col: Int,
+        selectedColor: Int
+    ): Boolean {
 
-        if (state == CellState.MARKED) {
-            playerGrid[x][y] = state
+        val correctColor = block.matrix[row][col]
+
+        if (selectedColor == correctColor) {
+
+            if (cell.color == null) {
+                remainingCells--
+            }
+
+            cell.color = selectedColor
+            cell.notes.clear()
+
             return true
         }
-        if (solution[x][y]) {
-            playerGrid[x][y] = CellState.FILLED
-            remainingFilledCells--
+
+        return false
+    }
+
+    private fun toggleNote(cell: PlayerCell, color: Int) {
+
+        if (cell.notes.contains(color)) {
+            cell.notes.remove(color)
         } else {
-            playerGrid[x][y] = CellState.EMPTY
+            cell.notes.add(color)
         }
-
-        return solution[x][y] == (state == CellState.FILLED)
     }
 
-    fun isSolved(): Boolean = remainingFilledCells == 0
-
-    fun getRowHints(row: Int): List<Int> {
-        return extractHints(solution[row])
+    fun isSolved(): Boolean {
+        return remainingCells == 0
     }
 
-    fun getColumnHints(col: Int): List<Int> {
-        val column = BooleanArray(solution.size) { solution[it][col] }
-        return extractHints(column)
-    }
+    fun getPlayerGrid(): Array<Array<PlayerCell>> = playerGrid
 
-    private fun extractHints(line: BooleanArray): List<Int> {
-        val hints = mutableListOf<Int>()
-        var count = 0
-        for (cell in line) {
-            if (cell) {
-                count++
-            } else if (count > 0) {
-                hints.add(count)
-                count = 0
-            }
-        }
-        if (count > 0) hints.add(count)
-        return if (hints.isEmpty()) listOf(0) else hints
-    }
-
-    fun getPlayerGrid(): Array<Array<CellState>> = playerGrid
 }

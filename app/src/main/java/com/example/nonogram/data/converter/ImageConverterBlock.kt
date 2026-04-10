@@ -1,16 +1,17 @@
 package com.example.nonogram.data.converter
 
 import com.example.nonogram.data.storage.Block
+import com.example.nonogram.data.storage.QuantizationResult
 
 object ImageConverterBlock {
 
     fun splitToBlocks(
-        solution: Array<IntArray>,
+        quantizationResult: QuantizationResult,
         blockSize: Int = 25
     ): List<Block> {
 
-        val height = solution.size
-        val width = solution[0].size
+        val height = quantizationResult.solution.size
+        val width = quantizationResult.solution[0].size
 
         val blocks = mutableListOf<Block>()
 
@@ -20,8 +21,7 @@ object ImageConverterBlock {
         for (by in 0 until blocksY) {
             for (bx in 0 until blocksX) {
 
-                val block = Array(blockSize) { IntArray(blockSize) }
-                val colors = mutableSetOf<Int>()
+                val block = MutableList(blockSize) { IntArray(blockSize) }
 
                 for (y in 0 until blockSize) {
                     for (x in 0 until blockSize) {
@@ -29,14 +29,13 @@ object ImageConverterBlock {
                         val globalY = by * blockSize + y
                         val globalX = bx * blockSize + x
 
-                        val value = solution[globalY][globalX]
+                        val value = quantizationResult.solution[globalY][globalX]
 
                         block[y][x] = value
-                        colors.add(value)
                     }
                 }
 
-                blocks.add(Block(block, colors))
+                blocks.add(Block(block as ArrayList<IntArray>, quantizationResult.palette))
             }
         }
 

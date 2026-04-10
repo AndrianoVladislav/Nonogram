@@ -1,10 +1,14 @@
 package com.example.nonogram.data.storage
 
 import android.graphics.Bitmap
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.core.graphics.set
+import androidx.core.graphics.createBitmap
 
 data class QuantizationResult(
-    val palette: List<Int>,          // цвета (ARGB)
-    val solution: Array<IntArray>    // индексы цветов
+    val solution: Array<IntArray>,   // индексы цветов
+    val palette: List<Color>           // цвета (ARGB)
 ) {
 
     fun quantizedToBitmap(): Bitmap {
@@ -12,7 +16,7 @@ data class QuantizationResult(
         val height =solution.size
         val width = solution[0].size
 
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(width, height)
 
         for (y in 0 until height) {
             for (x in 0 until width) {
@@ -20,7 +24,7 @@ data class QuantizationResult(
                 val colorIndex = solution[y][x]
                 val color = palette[colorIndex]
 
-                bitmap.setPixel(x, y, color)
+                bitmap[x, y] = color.toArgb()
             }
         }
 

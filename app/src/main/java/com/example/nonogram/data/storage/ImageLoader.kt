@@ -16,7 +16,9 @@ object ImageLoader {
     fun loadBitmapFromUri(context: Context, uri: Uri): Bitmap? {
         return try {
             val source = ImageDecoder.createSource(context.contentResolver, uri)
-            ImageDecoder.decodeBitmap(source)
+            ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            }
         } catch (e: Exception) {
             e.printStackTrace()
             null
