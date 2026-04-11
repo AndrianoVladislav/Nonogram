@@ -2,17 +2,26 @@ package com.example.nonogram.domain.entity
 
 import androidx.compose.runtime.mutableStateOf
 import com.example.nonogram.data.storage.Block
+import com.example.nonogram.data.storage.Hint
 import com.example.nonogram.data.storage.PlayerCell
 
 class Board(private val block: Block) {
 
     private val size = block.matrix.size
 
-    private val playerGrid: Array<Array<PlayerCell>> =
-        Array(size) { Array(size) { PlayerCell() } }
+//    private val playerGrid: Array<Array<PlayerCell>> =
+//        Array(size) { Array(size) { PlayerCell() } }
+
+    val playerGrid = mutableStateOf(Array(size) { Array(size) { PlayerCell() } })
 
     var remainingCells: Int = 0
         private set
+
+    val rowHints: List<List<Hint>> =
+        block.matrix.map { getRowHints(it) }
+
+    val colHints: List<List<Hint>> =
+        List(block.matrix.size) { col -> getColumnHints(col) }
 
     init {
         remainingCells = size * size
@@ -25,7 +34,7 @@ class Board(private val block: Block) {
         mode: InputMode
     ): Boolean {
 
-        val cell = playerGrid[row][col]
+        val cell = playerGrid.value[row][col]
 
         when (mode) {
 
@@ -77,6 +86,40 @@ class Board(private val block: Block) {
         return remainingCells == 0
     }
 
-    fun getPlayerGrid(): Array<Array<PlayerCell>> = playerGrid
+    fun getPlayerGrid(): Array<Array<PlayerCell>> = playerGrid.value
+
+    fun getRowHints(row: IntArray): List<Hint> {
+
+        val hints = mutableListOf<Hint>()
+
+        var count = 1
+        var currentColor = row[0]
+
+        for (i in 1 until row.size) {
+
+            if (row[i] == currentColor) {
+                count++
+            } else {
+                hints.add(Hint(count, currentColor))
+                currentColor = row[i]
+                count = 1
+            }
+        }
+
+        hints.add(Hint(count, currentColor))
+
+        return hints.sortedBy { it.length }
+    }
+
+    fun getColumnHints(col: Int): List<Hint> {
+
+        val column = IntArray(block.matrix.size) {
+            block.matrix[it][col]
+        }
+
+        return getRowHints(column)
+    }
+
+
 
 }

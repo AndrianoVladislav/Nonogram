@@ -21,7 +21,9 @@ object ImageConverterBlock {
         for (by in 0 until blocksY) {
             for (bx in 0 until blocksX) {
 
-                val block = MutableList(blockSize) { IntArray(blockSize) }
+//                val block = MutableList(blockSize) { IntArray(blockSize) }
+                val matrix = ArrayList<IntArray>(blockSize)
+                for (i in 0 until blockSize) matrix.add(IntArray(blockSize))
 
                 for (y in 0 until blockSize) {
                     for (x in 0 until blockSize) {
@@ -31,11 +33,11 @@ object ImageConverterBlock {
 
                         val value = quantizationResult.solution[globalY][globalX]
 
-                        block[y][x] = value
+                        matrix[y][x] = value
                     }
                 }
 
-                blocks.add(Block(block as ArrayList<IntArray>, quantizationResult.palette))
+                blocks.add(Block(matrix, quantizationResult.palette))
             }
         }
 

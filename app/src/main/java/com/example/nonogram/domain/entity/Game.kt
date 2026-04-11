@@ -10,8 +10,8 @@ class Game(solution: Block) {
     var isVictory: Boolean = false
         private set
 
-    fun makeMove(row: Int, col: Int, selectedColor: Int, mode: InputMode) {
-        if (lives <= 0) return
+    fun makeMove(row: Int, col: Int, selectedColor: Int, mode: InputMode): Boolean {
+        if (lives <= 0) return false
 
         val correct = board.checkMove(row, col, selectedColor, mode)
 
@@ -29,6 +29,7 @@ class Game(solution: Block) {
             }
         }
         print(" $col, $row ")
+        return true
     }
 
     fun getStatus(): String {
