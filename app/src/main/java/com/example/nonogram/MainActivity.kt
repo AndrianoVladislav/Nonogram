@@ -16,6 +16,7 @@ import com.example.nonogram.data.storage.ImageLoader
 import com.example.nonogram.domain.entity.Game
 import com.example.nonogram.ui.GameScreen
 import com.example.nonogram.ui.GameScreenTest
+import com.example.nonogram.ui.StartScreen
 
 class MainActivity : ComponentActivity() {
 
@@ -51,11 +52,16 @@ class MainActivity : ComponentActivity() {
 
                 // Отображаем экран игры через Compose
                 setContent {
-                    MaterialTheme {
-                        Surface(color = MaterialTheme.colorScheme.background) {
-                            GameScreen(game)
-                        }
-                    }
+
+                    StartScreen(
+                        onCollectionClick = { /* TODO */ },
+                        onSettingsClick = { /* TODO */ }
+                    )
+//                    MaterialTheme {
+//                        Surface(color = MaterialTheme.colorScheme.background) {
+//                            GameScreen(game)
+//                        }
+//                    }
                 }
             }
         }

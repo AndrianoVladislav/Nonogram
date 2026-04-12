@@ -5,8 +5,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Button
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,9 +16,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.nonogram.data.storage.Block
@@ -28,233 +32,318 @@ import com.example.nonogram.ui.theme.NonogramTheme
 @Composable
 fun GameScreen(game: Game) {
 
-    val grid = game.board.getPlayerGrid()
+    val board = game.board
+    val grid = board.getPlayerGrid()
     val gridSize = grid.size
 
-    var selectedColor by remember { mutableIntStateOf(0) }
-    var mode by remember { mutableStateOf(InputMode.FILL) }
+    val palette = game.block.usedColors
 
-    // Добавляем state для перерисовки при изменениях в Board
+    var selectedColor by remember { mutableIntStateOf(0) }
+    var fillMode by remember { mutableStateOf(true) } // ON = FILL
     var tick by remember { mutableIntStateOf(0) }
 
-    Column {
-        // Палитра цветов
-        Row(modifier = Modifier.padding(8.dp)) {
-            game.block.usedColors.forEachIndexed { index, color ->
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .padding(4.dp)
-                        .background(color)
-                        .border(
-                            width = if (selectedColor == index) 3.dp else 1.dp,
-                            color = Color.Black
-                        )
-                        .clickable {
-                            selectedColor = index
-                        }
-                )
-            }
-        }
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
 
-        // Переключение режима
-        Row(modifier = Modifier.padding(8.dp)) {
-            Button(onClick = { mode = InputMode.FILL }) {
-                Text("Fill")
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Button(onClick = { mode = InputMode.NOTE }) {
-                Text("Note")
-            }
-        }
+    val topSpacer = screenHeight * 0.05f
+    val leftHintsWidth = screenWidth * 0.15f
+    val fieldWidth = screenWidth * 0.80f
 
-        // Игровое поле
-        BoxWithConstraints(modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
-            .padding(8.dp)
+    val cellSize = fieldWidth / gridSize
+    val maxHints = 20
+
+    Column(modifier = Modifier.padding(10.dp,10.dp, 0.dp, 10.dp)
+        .fillMaxSize()) {
+
+        Spacer(modifier = Modifier.height(topSpacer))
+
+        // 🔷 Верхние подсказки
+        Canvas(
+            modifier = Modifier
+                .padding(start = leftHintsWidth)
+                .width(fieldWidth)
+                .height(cellSize * maxHints)
         ) {
-            val boardSizePx = this.constraints.maxWidth.toFloat()
-            val cellSize = boardSizePx / gridSize
 
-            Row {
-                Spacer(modifier = Modifier.size(boardSizePx.dp))
+            val px = cellSize.toPx()
 
-                game.board.rowHints[0].indices.forEach { col ->
-                    HintColumn(
-                        hints = game.board.colHints[col],
-                        palette = game.block.usedColors,
-                        size = cellSize
+            board.colHints.forEachIndexed { col, hints ->
+
+                val startY = (maxHints - hints.size) * px
+
+                hints.forEachIndexed { i, hint ->
+
+                    val x = col * px
+                    val y = startY + i * px
+
+                    drawCircle(
+                        color = palette[hint.color],
+                        radius = px / 2,
+                        center = Offset(x + px / 2, y + px / 2)
                     )
+
+                    drawContext.canvas.nativeCanvas.drawText(
+                        hint.length.toString(),
+                        x + px / 2,
+                        y + 5 + px / 2,
+                        android.graphics.Paint().apply {
+                            color = android.graphics.Color.WHITE
+                            textAlign = android.graphics.Paint.Align.CENTER
+                            textSize = px / 2
+                        }
+                    )
+
+//                    drawLine(
+//                        color = Color.Black,
+//                        start = Offset(x, 0f),
+//                        end = Offset(x, y),
+//                        strokeWidth = if ((col) % 5 == 0) 3f else 1f
+//                    )
                 }
             }
+        }
 
-            Row {
+        // 🔷 Основная часть (слева подсказки + поле)
+        Row {
 
-                Column {
-                    game.board.rowHints.forEach { hints ->
-                        HintRow(
-                            hints = hints,
-                            palette = game.block.usedColors,
-                            size = cellSize
-                        )
-                    }
-                }
+            // 🔶 Левые подсказки (scroll)
+            val rowHints = board.rowHints
 
+            val scrollState = rememberScrollState()
+
+            LaunchedEffect(Unit) {
+                scrollState.scrollTo(scrollState.maxValue)
+            }
+
+            Box(
+                modifier = Modifier
+                    .width(leftHintsWidth)
+                    .height(fieldWidth)
+                    .horizontalScroll(scrollState)
+            ) {
 
                 Canvas(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .pointerInput(gridSize, selectedColor, mode) {
-                            detectDragGestures(
-                                onDragStart = { offset ->
-                                    if (handleTouch(offset, cellSize, gridSize, game, selectedColor, mode)) {
-                                        tick++
-                                    }
-                                },
-                                onDrag = { change, _ ->
-                                    if (handleTouch(change.position, cellSize, gridSize, game, selectedColor, mode)) {
-                                        tick++
-                                    }
+                        .width(cellSize * rowHints.size)
+                        .height(fieldWidth)
+                ) {
+
+                    val px = cellSize.toPx()
+
+                    rowHints.forEachIndexed { row, hints ->
+
+                        val startX = (rowHints.size - hints.size) * px
+
+                        hints.forEachIndexed { i, hint ->
+
+                            val x = startX + i * px
+                            val y = row * px
+
+                            drawCircle(
+                                color = palette[hint.color],
+                                radius = px / 2,
+                                center = Offset(x + px / 2, y + px / 2)
+                            )
+
+                            drawContext.canvas.nativeCanvas.drawText(
+                                hint.length.toString(),
+                                x + px / 2,
+                                y + 5 + px / 2,
+                                android.graphics.Paint().apply {
+                                    color = android.graphics.Color.WHITE
+                                    textAlign = android.graphics.Paint.Align.CENTER
+                                    textSize = px / 2
                                 }
                             )
                         }
-                ) {
-                    // Используем tick чтобы Canvas знал что нужно перерисоваться
-                    tick.let { _ ->
-                        for (row in 0 until gridSize) {
-                            for (col in 0 until gridSize) {
-                                val cell = grid[row][col]
-                                val x = col * cellSize
-                                val y = row * cellSize
+                    }
+                }
+            }
 
-                                cell.color?.let { colorIndex ->
-                                    drawRect(
-                                        color = game.block.usedColors[colorIndex],
-                                        topLeft = Offset(x, y),
-                                        size = Size(cellSize, cellSize)
+            // 🔶 Игровое поле
+            Canvas(
+                modifier = Modifier
+                    .size(fieldWidth)
+                    .pointerInput(selectedColor, fillMode) {
+
+                        detectDragGestures(
+                            onDragStart = { offset ->
+                                handleTouch(offset, cellSize.toPx(), gridSize, game, selectedColor, fillMode)
+                                tick++
+                            },
+                            onDrag = { change, _ ->
+                                handleTouch(change.position, cellSize.toPx(), gridSize, game, selectedColor, fillMode)
+                                tick++
+                            }
+                        )
+                    }
+            ) {
+
+                // Используем tick чтобы Canvas знал что нужно перерисоваться
+                tick.let { _ ->
+                    for (row in 0 until gridSize) {
+                        for (col in 0 until gridSize) {
+
+                            val cell = grid[row][col]
+
+                            val x = col * cellSize.toPx()
+                            val y = row * cellSize.toPx()
+
+                            // 🔹 Основной цвет
+                            cell.color?.let {
+                                drawRect(
+                                    color = palette[it],
+                                    topLeft = Offset(x, y),
+                                    size = Size(cellSize.toPx(), cellSize.toPx())
+                                )
+                            }
+
+                            // 🔹 Notes
+                            if (cell.color == null && cell.notes.isNotEmpty()) {
+
+                                val radius = cellSize.toPx() / 6
+
+                                cell.notes.forEachIndexed { i, note ->
+                                    val nx = x + (i % 3) * (cellSize.toPx() / 3) + radius
+                                    val ny = y + (i / 3) * (cellSize.toPx() / 3) + radius
+
+                                    drawCircle(
+                                        color = palette[note],
+                                        radius = radius,
+                                        center = Offset(nx, ny)
                                     )
                                 }
-
-                                if (cell.color == null && cell.notes.isNotEmpty()) {
-                                    val radius = cellSize / 6
-                                    cell.notes.forEachIndexed { i, noteColor ->
-                                        val nx = x + (i % 3) * (cellSize / 3) + radius
-                                        val ny = y + (i / 3) * (cellSize / 3) + radius
-                                        drawCircle(
-                                            color = game.block.usedColors[noteColor],
-                                            radius = radius,
-                                            center = Offset(nx, ny)
-                                        )
-                                    }
-                                }
-
-                                drawRect(
-                                    color = Color.Black,
-                                    topLeft = Offset(x, y),
-                                    size = Size(cellSize, cellSize),
-                                    style = Stroke(width = if (row % 5 == 0 || col % 5 == 0) 3f else 1f)
-                                )
                             }
                         }
                     }
                 }
+
+                // 🔹 Сетка
+                val px = cellSize.toPx()
+
+                // 🔹 вертикальные линии
+                for (i in 0..gridSize) {
+
+                    val stroke = if (i % 5 == 0) 5f else 2f
+
+                    drawLine(
+                        color = Color.Black,
+                        start = Offset(i * px, 0f),
+                        end = Offset(i * px, gridSize * px),
+                        strokeWidth = stroke
+                    )
+                }
+
+                // 🔹 горизонтальные линии
+                for (i in 0..gridSize) {
+
+                    val stroke = if (i % 5 == 0) 5f else 2f
+
+                    drawLine(
+                        color = Color.Black,
+                        start = Offset(0f, i * px),
+                        end = Offset(gridSize * px, i * px),
+                        strokeWidth = stroke
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        // 🔷 Нижняя панель
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                ,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+
+            // 🎨 Палитра
+            Row {
+                palette.forEachIndexed { index, color ->
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .padding(4.dp)
+                            .background(color)
+                            .border(
+                                width = if (selectedColor == index) 3.dp else 1.dp,
+                                color = Color.Black
+                            )
+                            .clickable { selectedColor = index }
+                    )
+                }
             }
 
-
+            // 🔘 Switch
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("NOTE")
+                Switch(
+                    checked = fillMode,
+                    onCheckedChange = { fillMode = it }
+                )
+                Text("FILL")
+            }
         }
     }
 }
 
 @Composable
-fun HintRow(hints: List<Hint>, palette: List<Color>, size: Float) {
+fun HintCircle(hint: Hint, palette: List<Color>, cellSize: Dp) {
 
-    Row(
-//        modifier = Modifier.height(size.dp / 2)
-        modifier = Modifier.height((15.09).dp),
+    Box(
+        modifier = Modifier
+            .size(cellSize)
+            .padding(2.dp),
+        contentAlignment = Alignment.Center
     ) {
-        hints.forEach { hint ->
 
-            Box(
-                modifier = Modifier
-//                    .size(size.dp / 2)
-                    .padding(2.dp),
-                contentAlignment = Alignment.Center
-            ) {
-
-                Canvas(modifier = Modifier.size(size.dp)) {
-
-                    drawCircle(
-                        color = palette[hint.color],
-                        radius = size / 2
-                    )
-                }
-
-                Text(
-                    text = hint.length.toString(),
-                    color = Color.White,
-                    fontSize = 12.sp
-                )
-            }
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            drawCircle(
+                color = palette[hint.color],
+                radius = size.minDimension / 2
+            )
         }
+
+        Text(
+            text = hint.length.toString(),
+            color = Color.White,
+            fontSize = 12.sp
+        )
     }
 }
 
-@Composable
-fun HintColumn(hints: List<Hint>, palette: List<Color>, size: Float) {
-
-    Column(
-        modifier = Modifier.width(size.dp),
-        verticalArrangement = Arrangement.Bottom
-    ) {
-        hints.forEach { hint ->
-
-            Box(
-                modifier = Modifier
-                    .size(size.dp)
-                    .padding(2.dp),
-                contentAlignment = Alignment.Center
-            ) {
-
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    drawCircle(
-                        color = palette[hint.color],
-                        radius = size / 2
-                    )
-                }
-
-                Text(
-                    text = hint.length.toString(),
-                    color = Color.White,
-                    fontSize = 12.sp
-                )
-            }
-        }
-    }
-}
 private fun handleTouch(
     offset: Offset,
     cellSize: Float,
-    gridSize: Int,
+    size: Int,
     game: Game,
     selectedColor: Int,
-    mode: InputMode
-): Boolean {
+    fillMode: Boolean
+) {
+
     val col = (offset.x / cellSize).toInt()
     val row = (offset.y / cellSize).toInt()
 
-    if (row in 0 until gridSize && col in 0 until gridSize) {
-        return game.makeMove(row, col, selectedColor, mode)
+    if (row in 0 until size && col in 0 until size) {
+
+        val mode = if (fillMode) InputMode.FILL else InputMode.NOTE
+
+        val success = game.makeMove(row, col, selectedColor, mode)
+
+        if (!success) return
     }
-    return false
 }
 
 @Preview(showBackground = true)
 @Composable
 fun GameScreenPreview() {
     val solution = ArrayList<IntArray>()
-    repeat(25) { solution.add(IntArray(25)) }
-    val block = Block(solution, listOf(Color.Red, Color.Blue))
+    repeat(24) { solution.add(IntArray(25)) }
+    solution.add(intArrayOf(1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5))
+    val block = Block(solution, listOf(Color.Red, Color.Blue, Color.Green, Color.Yellow, Color.Cyan, Color.Magenta))
     val game = Game(block)
     NonogramTheme {
         GameScreen(game = game)
