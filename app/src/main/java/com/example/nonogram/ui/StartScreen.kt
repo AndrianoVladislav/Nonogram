@@ -1,7 +1,13 @@
 package com.example.nonogram.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -22,8 +28,8 @@ fun StartScreen(
     onSettingsClick: () -> Unit
 ) {
 
-    val backgroundColor = Color(0xFF1565C0) // синий
-    val buttonColor = Color(0xFF2E7D32)     // зелёный
+    val backgroundColor = Color(0xFF1565C0)
+    val buttonColor = Color(0xFF2E7D32)
 
     Box(
         modifier = Modifier
@@ -31,7 +37,7 @@ fun StartScreen(
             .background(backgroundColor)
     ) {
 
-        // 🔧 Настройки (шестерёнка)
+        // Nastavení
         IconButton(
             onClick = onSettingsClick,
             modifier = Modifier
@@ -45,7 +51,6 @@ fun StartScreen(
             )
         }
 
-        // 🔷 Центр (кнопки)
         Column(
             modifier = Modifier
                 .align(Alignment.Center),

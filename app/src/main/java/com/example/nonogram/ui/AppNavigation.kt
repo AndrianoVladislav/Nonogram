@@ -2,10 +2,9 @@ package com.example.nonogram.ui
 
 import android.os.Build
 import androidx.annotation.RequiresApi
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.navigation.compose.NavHost
@@ -62,21 +61,20 @@ fun AppNavigation(
 
             val id = backStack.arguments?.getString("id")!!
 
-            // 🔥 загружаем meta
             val puzzle = remember {
                 storageManager.loadMeta().first { it.id == id }
             }
 
             var currentBlock by remember {
-                mutableStateOf(puzzle.currentBlock)
+                mutableIntStateOf(puzzle.currentBlock)
             }
 
-            var restartKey by remember { mutableStateOf(0) }
+            var restartKey by remember { mutableIntStateOf(0) }
 
             val block = storageManager.loadBlock(id, currentBlock)!!
 
             val game = remember(currentBlock, restartKey) {
-                Game( block)
+                Game(block)
             }
 
             GameScreen(
@@ -104,7 +102,7 @@ fun AppNavigation(
                 storageManager = storageManager,
                 onPuzzleCreated = {
                     onDataChanged()
-                    navController.popBackStack() // назад в коллекцию
+                    navController.popBackStack()
                 }
             )
         }

@@ -20,16 +20,16 @@ class Game(solution: Block) {
 
         if (!correct) {
             lives--
-            println("❌ Ошибка! Осталось жизней: $lives")
+            println("X Chyba! Zbývající životy: $lives")
             if (lives <= 0) {
-                println("💀 Конец игры!")
+                println("X Konec hry!")
                 isGameOver = true
             }
         } else {
-            println("✅ Верный ход!")
+            println("Správný tah!")
             if (board.isSolved()) {
                 isVictory = true
-                println("🎉 Победа!")
+                println("Win!")
             }
         }
         print(" $col, $row ")
@@ -37,7 +37,7 @@ class Game(solution: Block) {
     }
 
     fun getStatus(): String {
-        return "Жизни: $lives, Оставшиеся клетки: ${board.remainingCells}"
+        return "Životy: $lives, Zbývající buňky: ${board.remainingCells}"
     }
 }
 

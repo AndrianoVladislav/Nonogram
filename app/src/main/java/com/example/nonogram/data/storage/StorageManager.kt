@@ -2,9 +2,6 @@ package com.example.nonogram.data.storage
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.Paint
 import android.net.Uri
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -16,7 +13,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
-class StorageManager(val context: Context) {
+class StorageManager(context: Context) {
 
     private val json = Json { prettyPrint = true }
 
@@ -86,7 +83,6 @@ class StorageManager(val context: Context) {
         if (index == -1) return
 
         val puzzle = puzzles[index]
-
         puzzles[index] = puzzle.copy(currentBlock = newBlock)
 
         saveMeta(puzzles)
@@ -140,13 +136,6 @@ class StorageManager(val context: Context) {
             ZipOutputStream(BufferedOutputStream(outputStream)).use { zip ->
 
                 // 🔹 blocks.json
-//                val blocksFile = File(puzzleDir, "blocks.json")
-//                if (blocksFile.exists()) {
-//                    zip.putNextEntry(ZipEntry("blocks.json"))
-//                    zip.write(blocksFile.readBytes())
-//                    zip.closeEntry()
-//                }
-
                 zip.putNextEntry(ZipEntry("blocks.json"))
                 zip.write(json.toByteArray())
                 zip.closeEntry()
@@ -189,17 +178,17 @@ class StorageManager(val context: Context) {
             }
         }
 
-        // 🔥 читаем blocks.json
+        // blocks.json
         val compressedData: RLEBlocks =
             Json.decodeFromString(File(puzzleDir, "blocks.json").readText())
 
-        // 🔥 распаковываем RLE
-
-        val blocks:List<Block> = compressedData.blocks.map { block ->
-            Block(matrix = block.map {
-                decodeRLE(it)
-            },
-            usedColors = compressedData.palette
+        // RLE
+        val blocks: List<Block> = compressedData.blocks.map { block ->
+            Block(
+                matrix = block.map {
+                    decodeRLE(it)
+                },
+                usedColors = compressedData.palette
             )
         }
 
@@ -208,10 +197,7 @@ class StorageManager(val context: Context) {
             blocks = blocks
         )
 
-        // 🔥 сохраняем уже нормальные данные обратно
         savePuzzleData(newId, decompressedBlocks)
-
-        // 🔥 создаём новый meta
         val meta = loadMeta().toMutableList()
 
         meta.add(

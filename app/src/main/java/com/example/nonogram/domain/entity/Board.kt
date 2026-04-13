@@ -20,12 +20,8 @@ class Board(private val block: Block) {
     val colHints: List<List<Hint>> =
         List(block.matrix.size) { col -> getColumnHints(col) }
 
-//    init {
-//        remainingCells = size * size
-//    }
-
     init {
-        remainingCells = 1
+        remainingCells = size * size
     }
 
     fun checkMove(
@@ -114,14 +110,9 @@ class Board(private val block: Block) {
 
     fun getColumnHints(col: Int): List<Hint> {
 
-
         val column: List<Int> = List(block.matrix.size) { y ->
             block.matrix[y][col]
         }
-//            val globalY = by * blockSize + y
-//        val column = IntArray(block.matrix.size) {
-//            block.matrix[it][col]
-//        }
 
         return getRowHints(column)
     }

@@ -7,18 +7,18 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,7 +28,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.nonogram.data.converter.ImageConverterBlock
 import com.example.nonogram.data.converter.ImageConverterQuantization
 import com.example.nonogram.data.converter.ImageConverterResize
@@ -36,8 +35,6 @@ import com.example.nonogram.data.storage.ImageLoader
 import com.example.nonogram.data.storage.PuzzleData
 import com.example.nonogram.data.storage.PuzzleItem
 import com.example.nonogram.data.storage.StorageManager
-import com.example.nonogram.data.storage.UploadState
-import com.example.nonogram.domain.entity.UploadViewModel
 
 @RequiresApi(Build.VERSION_CODES.P)
 @Composable
@@ -50,7 +47,7 @@ fun UploadScreen(
 
     var isProcessing by remember { mutableStateOf(false) }
 
-    // 📸 Галерея
+    // Galerie
     val imageLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             uri?.let {
@@ -63,7 +60,7 @@ fun UploadScreen(
             }
         }
 
-    // 📁 Файл
+    // Soubor
     val fileLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             uri?.let {
@@ -101,7 +98,6 @@ fun UploadScreen(
             }
         }
 
-        // 🔄 Индикатор загрузки
         if (isProcessing) {
             Box(
                 modifier = Modifier
@@ -128,7 +124,6 @@ fun handleImageUri(
     val quantized = ImageConverterQuantization.quantizeKMeans(resized)
     val blocks = ImageConverterBlock.splitToBlocks(quantized)
 
-    // 🔥 создаём PuzzleData
     val puzzleData = PuzzleData(
         palette = blocks[0].usedColors,
         blocks = blocks
@@ -137,11 +132,9 @@ fun handleImageUri(
     val id = "puzzle_${System.currentTimeMillis()}"
     val resultBitmap = ImageConverterQuantization.quantizedToBitmap(quantized)
 
-    // 💾 сохраняем
     storageManager.savePuzzleData(id, puzzleData)
     storageManager.saveResultImage(id, resultBitmap)
 
-    // 🧠 обновляем meta
     val meta = storageManager.loadMeta().toMutableList()
 
     meta.add(
@@ -153,67 +146,4 @@ fun handleImageUri(
     )
 
     storageManager.saveMeta(meta)
-}
-
-fun handleFileUri(
-    context: Context,
-    uri: Uri,
-    storageManager: StorageManager
-) {
-    // TODO: unzip + import puzzle
-}
-
-//@Composable
-//fun UploadScreen(
-//    storageManager: StorageManager,
-//    onFinished: () -> Unit
-//) {
-//
-//    val viewModel = remember { UploadViewModel(storageManager) }
-//
-//    val state by viewModel.state.collectAsState()
-//
-//    val pickImage = rememberLauncherForActivityResult(
-//        contract = ActivityResultContracts.GetContent()
-//    ) { uri ->
-//        uri?.let { viewModel.onImageSelected(it) }
-//    }
-//
-//    LaunchedEffect(Unit) {
-//        pickImage.launch("image/*")
-//    }
-//
-//    UploadContent(state)
-//
-//    if (state.finished) {
-//        onFinished()
-//    }
-//}
-
-@Composable
-fun UploadContent(state: UploadState) {
-
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-
-        when {
-
-            state.loading -> {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator()
-                    Text("Processing image...")
-                }
-            }
-
-            state.error != null -> {
-                Text("Error: ${state.error}")
-            }
-
-            else -> {
-                Text("Ready")
-            }
-        }
-    }
 }

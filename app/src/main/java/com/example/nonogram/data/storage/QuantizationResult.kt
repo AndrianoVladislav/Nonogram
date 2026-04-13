@@ -7,8 +7,8 @@ import androidx.core.graphics.set
 import androidx.core.graphics.createBitmap
 
 data class QuantizationResult(
-    val solution: Array<IntArray>,   // индексы цветов
-    val palette: List<Color>           // цвета (ARGB)
+    val solution: Array<IntArray>,
+    val palette: List<Color>
 ) {
 
     fun quantizedToBitmap(): Bitmap {

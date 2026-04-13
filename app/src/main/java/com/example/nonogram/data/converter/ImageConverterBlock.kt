@@ -30,26 +30,7 @@ object ImageConverterBlock {
                         quantizationResult.solution[globalY][globalX]
                     }
                 }
-//                val matrix: List<List<Int>> = List(blockSize)
-
-//                val block = MutableList(blockSize) { IntArray(blockSize) }
-//                val matrix = ArrayList<IntArray>(blockSize)
-//                for (i in 0 until blockSize) matrix.add(IntArray(blockSize))
-//
-//                for (y in 0 until blockSize) {
-//                    for (x in 0 until blockSize) {
-//
-//                        val globalY = by * blockSize + y
-//                        val globalX = bx * blockSize + x
-//
-//                        val value = quantizationResult.solution[globalY][globalX]
-//
-//                        matrix[y][x] = value
-//                    }
-//                }
-
                 val palette = quantizationResult.palette.map { it.toArgb() }
-
 
                 blocks.add(Block(matrix, palette))
             }
