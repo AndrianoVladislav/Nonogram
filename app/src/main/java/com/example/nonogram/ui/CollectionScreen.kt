@@ -1,5 +1,6 @@
 package com.example.nonogram.ui
 
+import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -8,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -20,9 +22,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -31,6 +35,7 @@ import com.example.nonogram.data.storage.Block
 import com.example.nonogram.data.storage.Hint
 import com.example.nonogram.data.storage.ImageLoader.loadImageBitmapFromFile
 import com.example.nonogram.data.storage.PuzzleItem
+import com.example.nonogram.data.storage.StorageManager
 import com.example.nonogram.domain.entity.Game
 import com.example.nonogram.domain.entity.InputMode
 import com.example.nonogram.ui.theme.NonogramTheme
@@ -38,6 +43,7 @@ import com.example.nonogram.ui.theme.NonogramTheme
 @Composable
 fun CollectionScreen(
     puzzles: List<PuzzleItem>,
+    storageManager: StorageManager,
     onPlay: (PuzzleItem) -> Unit,
     onSend: (PuzzleItem) -> Unit,
     onUpload: () -> Unit
@@ -48,12 +54,15 @@ fun CollectionScreen(
     // 🔥 сортировка (завершённые вниз)
     val sorted = puzzles.sortedBy { it.currentBlock == it.totalBlocks }
 
-    Row(modifier = Modifier.fillMaxSize()) {
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+    val topSpacer = screenHeight * 0.75f
+
+    Column (modifier = Modifier.fillMaxSize()) {
 
         // 🔷 Список (75%)
         LazyColumn(
             modifier = Modifier
-                .fillMaxHeight()
+                .height(topSpacer)
                 .weight(3f)
                 .padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -63,6 +72,7 @@ fun CollectionScreen(
 
                 PuzzleItemView(
                     puzzle = puzzle,
+                    storageManager = storageManager,
                     isSelected = selected?.id == puzzle.id,
                     onClick = { selected = puzzle }
                 )
@@ -70,38 +80,36 @@ fun CollectionScreen(
         }
 
         // 🔷 Панель кнопок (25%)
-        Column(
+        Row(
             modifier = Modifier
-                .fillMaxHeight()
-                .weight(1f)
+                .fillMaxWidth()
+                .height(screenHeight - topSpacer)
                 .padding(8.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
         ) {
 
             Button(
-                onClick = { selected?.let { onPlay(it) } },
-                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    if (selected?.currentBlock != selected?.totalBlocks) {
+                        selected?.let { onPlay(it) }
+                    }
+                     },
                 enabled = selected != null
             ) {
                 Text("Hrát")
             }
 
-            Spacer(Modifier.height(16.dp))
-
             Button(
                 onClick = { selected?.let { onSend(it) } },
-                modifier = Modifier.fillMaxWidth(),
                 enabled = selected != null
             ) {
                 Text("Odeslat")
             }
 
-            Spacer(Modifier.height(16.dp))
 
             Button(
                 onClick = onUpload,
-                modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Nahrát")
             }
@@ -112,16 +120,27 @@ fun CollectionScreen(
 @Composable
 fun PuzzleItemView(
     puzzle: PuzzleItem,
+    storageManager: StorageManager,
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
 
-    val bitmap = remember(puzzle.previewPath) {
-        loadImageBitmapFromFile(puzzle.previewPath)
+    val context = LocalContext.current
+
+    val resultFile = remember {
+        storageManager.getResultImage(puzzle.id)
+    }
+
+    val isCompleted = puzzle.currentBlock >= puzzle.totalBlocks
+
+    val bitmap = remember(resultFile) {
+        if (resultFile.exists()) {
+            BitmapFactory.decodeFile(resultFile.absolutePath)?.asImageBitmap()
+        } else null
     }
 
     val progress =
-        puzzle.currentBlock.toFloat() / puzzle.totalBlocks.toFloat()
+        puzzle.currentBlock.toFloat() / puzzle.totalBlocks
 
     Box(
         modifier = Modifier
@@ -134,34 +153,28 @@ fun PuzzleItemView(
             .clickable { onClick() }
     ) {
 
-        if (bitmap != null) {
+        if (isCompleted && bitmap != null) {
+
             Image(
                 bitmap = bitmap,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize()
             )
+
         } else {
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.LightGray)
-            )
-        }
-
-        // 🔹 Прогресс бар
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(6.dp)
-                .align(Alignment.BottomStart)
-                .background(Color.DarkGray)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(progress)
-                    .fillMaxHeight()
-                    .background(Color.Green)
-            )
+                    .background(Color.White),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "${(progress * 100).toInt()}%",
+                    fontSize = 20.sp,
+                    color = Color.Black
+                )
+            }
         }
     }
 }

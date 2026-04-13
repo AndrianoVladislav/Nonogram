@@ -1,26 +1,27 @@
 package com.example.nonogram.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.nonogram.data.storage.PuzzleItem
+import com.example.nonogram.data.storage.StorageManager
+import com.example.nonogram.domain.entity.Game
 
+@RequiresApi(Build.VERSION_CODES.P)
 @Composable
-fun AppNavigation() {
+fun AppNavigation(
+    puzzles: List<PuzzleItem>,
+    storageManager: StorageManager,
+    onDataChanged: () -> Unit
+) {
 
     val navController = rememberNavController()
 
@@ -31,35 +32,94 @@ fun AppNavigation() {
                 onCollectionClick = {
                     navController.navigate("collection")
                 },
-                onSettingsClick = { }
+                onSettingsClick = {}
             )
         }
 
         composable("collection") {
+
+            onDataChanged()
+
             CollectionScreen(
-                puzzles = sampleData(),
-                onPlay = {
-                    navController.navigate("game")
+                puzzles = puzzles,
+                storageManager = storageManager,
+
+                onPlay = { puzzle ->
+                    navController.navigate("game/${puzzle.id}")
                 },
-                onSend = {
-                    navController.navigate("send")
+
+                onSend = { puzzle ->
+                    navController.navigate("send/${puzzle.id}")
                 },
+
                 onUpload = {
                     navController.navigate("upload")
                 }
             )
         }
 
-        composable("game") {
-            GameScreen(game = sampleGame())
-        }
+        composable("game/{id}") { backStack ->
 
-        composable("send") {
-            Text("Send Screen")
+            val id = backStack.arguments?.getString("id")!!
+
+            // 🔥 загружаем meta
+            val puzzle = remember {
+                storageManager.loadMeta().first { it.id == id }
+            }
+
+            var currentBlock by remember {
+                mutableStateOf(puzzle.currentBlock)
+            }
+
+            var restartKey by remember { mutableStateOf(0) }
+
+            val block = storageManager.loadBlock(id, currentBlock)!!
+
+            val game = remember(currentBlock, restartKey) {
+                Game( block)
+            }
+
+            GameScreen(
+                game = game,
+                puzzleId = id,
+                storageManager = storageManager,
+
+                onNextBlock = {
+                    currentBlock++
+                },
+
+                onRestart = {
+                    restartKey++
+                },
+
+                onExit = {
+                    onDataChanged()
+                    navController.popBackStack()
+                }
+            )
         }
 
         composable("upload") {
-            Text("Upload Screen")
+            UploadScreen(
+                storageManager = storageManager,
+                onPuzzleCreated = {
+                    onDataChanged()
+                    navController.popBackStack() // назад в коллекцию
+                }
+            )
+        }
+
+        composable("send/{id}") { backStack ->
+
+            val id = backStack.arguments?.getString("id")!!
+
+            SendScreen(
+                puzzleId = id,
+                storageManager = storageManager,
+                onDone = {
+                    navController.popBackStack()
+                }
+            )
         }
     }
 }

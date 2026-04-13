@@ -9,9 +9,6 @@ class Board(private val block: Block) {
 
     private val size = block.matrix.size
 
-//    private val playerGrid: Array<Array<PlayerCell>> =
-//        Array(size) { Array(size) { PlayerCell() } }
-
     val playerGrid = mutableStateOf(Array(size) { Array(size) { PlayerCell() } })
 
     var remainingCells: Int = 0
@@ -23,8 +20,12 @@ class Board(private val block: Block) {
     val colHints: List<List<Hint>> =
         List(block.matrix.size) { col -> getColumnHints(col) }
 
+//    init {
+//        remainingCells = size * size
+//    }
+
     init {
-        remainingCells = size * size
+        remainingCells = 1
     }
 
     fun checkMove(
@@ -88,7 +89,7 @@ class Board(private val block: Block) {
 
     fun getPlayerGrid(): Array<Array<PlayerCell>> = playerGrid.value
 
-    fun getRowHints(row: IntArray): List<Hint> {
+    fun getRowHints(row: List<Int>): List<Hint> {
 
         val hints = mutableListOf<Hint>()
 
@@ -108,14 +109,19 @@ class Board(private val block: Block) {
 
         hints.add(Hint(count, currentColor))
 
-        return hints.sortedBy { it.length }
+        return hints.sortedWith(compareBy(Hint::length, Hint::color))
     }
 
     fun getColumnHints(col: Int): List<Hint> {
 
-        val column = IntArray(block.matrix.size) {
-            block.matrix[it][col]
+
+        val column: List<Int> = List(block.matrix.size) { y ->
+            block.matrix[y][col]
         }
+//            val globalY = by * blockSize + y
+//        val column = IntArray(block.matrix.size) {
+//            block.matrix[it][col]
+//        }
 
         return getRowHints(column)
     }

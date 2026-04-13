@@ -8,6 +8,8 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -17,20 +19,30 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.nonogram.data.storage.Block
 import com.example.nonogram.data.storage.Hint
+import com.example.nonogram.data.storage.StorageManager
 import com.example.nonogram.domain.entity.Game
 import com.example.nonogram.domain.entity.InputMode
 import com.example.nonogram.ui.theme.NonogramTheme
 
 @Composable
-fun GameScreen(game: Game) {
+fun GameScreen(
+    game: Game,
+    onExit: () -> Boolean,
+    onNextBlock: () -> Unit,
+    onRestart: () -> Unit,
+    puzzleId: String,
+    storageManager: StorageManager
+) {
 
     val board = game.board
     val grid = board.getPlayerGrid()
@@ -41,6 +53,8 @@ fun GameScreen(game: Game) {
     var selectedColor by remember { mutableIntStateOf(0) }
     var fillMode by remember { mutableStateOf(true) } // ON = FILL
     var tick by remember { mutableIntStateOf(0) }
+    var showWinDialog by remember { mutableStateOf(false) }
+    var showLoseDialog by remember { mutableStateOf(false) }
 
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
@@ -77,7 +91,7 @@ fun GameScreen(game: Game) {
                     val y = startY + i * px
 
                     drawCircle(
-                        color = palette[hint.color],
+                        color = Color(palette[hint.color]),
                         radius = px / 2,
                         center = Offset(x + px / 2, y + px / 2)
                     )
@@ -92,13 +106,6 @@ fun GameScreen(game: Game) {
                             textSize = px / 2
                         }
                     )
-
-//                    drawLine(
-//                        color = Color.Black,
-//                        start = Offset(x, 0f),
-//                        end = Offset(x, y),
-//                        strokeWidth = if ((col) % 5 == 0) 3f else 1f
-//                    )
                 }
             }
         }
@@ -140,7 +147,7 @@ fun GameScreen(game: Game) {
                             val y = row * px
 
                             drawCircle(
-                                color = palette[hint.color],
+                                color = Color(palette[hint.color]),
                                 radius = px / 2,
                                 center = Offset(x + px / 2, y + px / 2)
                             )
@@ -179,6 +186,13 @@ fun GameScreen(game: Game) {
                     }
             ) {
 
+                if (game.isVictory)
+                    showWinDialog = true
+
+                if (game.isGameOver) {
+                    showLoseDialog = true
+                }
+
                 // Используем tick чтобы Canvas знал что нужно перерисоваться
                 tick.let { _ ->
                     for (row in 0 until gridSize) {
@@ -192,7 +206,7 @@ fun GameScreen(game: Game) {
                             // 🔹 Основной цвет
                             cell.color?.let {
                                 drawRect(
-                                    color = palette[it],
+                                    color = Color(palette[it]),
                                     topLeft = Offset(x, y),
                                     size = Size(cellSize.toPx(), cellSize.toPx())
                                 )
@@ -208,7 +222,7 @@ fun GameScreen(game: Game) {
                                     val ny = y + (i / 3) * (cellSize.toPx() / 3) + radius
 
                                     drawCircle(
-                                        color = palette[note],
+                                        color = Color(palette[note]),
                                         radius = radius,
                                         center = Offset(nx, ny)
                                     )
@@ -267,7 +281,7 @@ fun GameScreen(game: Game) {
                         modifier = Modifier
                             .size(40.dp)
                             .padding(4.dp)
-                            .background(color)
+                            .background(Color(color))
                             .border(
                                 width = if (selectedColor == index) 3.dp else 1.dp,
                                 color = Color.Black
@@ -287,6 +301,92 @@ fun GameScreen(game: Game) {
                 Text("FILL")
             }
         }
+    }
+
+    if (showWinDialog) {
+
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Hotovo!") },
+            text = { Text("Chceš pokračovat?") },
+
+            confirmButton = {
+                Button(onClick = {
+
+                    // 🔥 сохраняем прогресс
+                    val puzzle = storageManager
+                        .loadMeta()
+                        .first { it.id == puzzleId }
+
+                    val nextBlock = puzzle.currentBlock + 1
+
+                    storageManager.updateProgress(puzzleId, nextBlock)
+
+                    showWinDialog = false
+
+                    if (nextBlock < puzzle.totalBlocks) {
+                        onNextBlock()
+                    } else {
+                        onExit()
+                    }
+
+                }) {
+                    Text("Pokračovat")
+                }
+            },
+
+            dismissButton = {
+                Button(onClick = {
+
+                    val puzzle = storageManager
+                        .loadMeta()
+                        .first { it.id == puzzleId }
+
+                    val nextBlock = puzzle.currentBlock + 1
+                    storageManager.updateProgress(puzzleId, nextBlock)
+
+                    showWinDialog = false
+                    onExit()
+
+                }) {
+                    Text("Zpět")
+                }
+            }
+        )
+    }
+
+    if (showLoseDialog) {
+
+        AlertDialog(
+            onDismissRequest = {},
+
+            title = { Text("Prohra") },
+            text = { Text("Chceš to zkusit znovu?") },
+
+            confirmButton = {
+                Button(onClick = {
+
+                    showLoseDialog = false
+
+                    // 🔥 перезапуск блока
+                    onRestart()
+
+                }) {
+                    Text("Znovu")
+                }
+            },
+
+            dismissButton = {
+                Button(onClick = {
+
+                    showLoseDialog = false
+                    onExit()
+
+                }) {
+                    Text("Zpět")
+                }
+            }
+        )
     }
 }
 
@@ -340,12 +440,25 @@ private fun handleTouch(
 @Preview(showBackground = true)
 @Composable
 fun GameScreenPreview() {
-    val solution = ArrayList<IntArray>()
-    repeat(24) { solution.add(IntArray(25)) }
-    solution.add(intArrayOf(1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5))
-    val block = Block(solution, listOf(Color.Red, Color.Blue, Color.Green, Color.Yellow, Color.Cyan, Color.Magenta))
+    val solution = List(25) { y ->
+        if (y == 24) {
+            listOf(1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5)
+        } else {
+            List(25) { 0 }
+        }
+    }
+//    repeat(24) { solution.add(IntArray(25)) }
+//    solution.add(listOf(1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5))
+    val block = Block(solution, listOf(Color.Red.toArgb(), Color.Blue.toArgb(),
+        Color.Green.toArgb(), Color.Yellow.toArgb(), Color.Cyan.toArgb(), Color.Magenta.toArgb()))
+
+    fun reload(): Boolean {
+        return true
+    }
+
     val game = Game(block)
     NonogramTheme {
-        GameScreen(game = game)
+        GameScreen(game = game, onExit = { reload() }, onNextBlock = {}, onRestart = {}, puzzleId = "123",
+            storageManager = StorageManager(LocalContext.current))
     }
 }

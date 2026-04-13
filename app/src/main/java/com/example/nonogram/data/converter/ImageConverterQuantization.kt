@@ -2,6 +2,7 @@ package com.example.nonogram.data.converter
 
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.core.graphics.ColorUtils
 import com.example.nonogram.data.storage.QuantizationResult
 import kotlin.random.Random
@@ -115,5 +116,24 @@ object ImageConverterQuantization {
         val dA = c1[1] - c2[1]
         val dB = c1[2] - c2[2]
         return dL * dL + dA * dA + dB * dB
+    }
+
+    fun quantizedToBitmap(
+        quantization: QuantizationResult
+    ): Bitmap {
+        val height = quantization.solution.size
+        val width = quantization.solution[0].size
+
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                val colorIndex = quantization.solution[y][x]
+                val color = quantization.palette[colorIndex].toArgb()
+                bitmap.setPixel(x, y, color)
+            }
+        }
+
+        return bitmap
     }
 }

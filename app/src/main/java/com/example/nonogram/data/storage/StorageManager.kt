@@ -5,12 +5,18 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.net.Uri
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 
-class StorageManager(private val context: Context) {
+class StorageManager(val context: Context) {
 
     private val json = Json { prettyPrint = true }
 
@@ -92,5 +98,167 @@ class StorageManager(private val context: Context) {
 
     fun getResultImage(id: String): File {
         return File(getPuzzleDir(id), "result.png")
+    }
+
+    fun addPuzzle(puzzle: PuzzleItem) {
+
+        val list = loadMeta().toMutableList()
+
+        list.add(puzzle)
+
+        saveMeta(list)
+    }
+
+    fun saveResultImage(id: String, bitmap: Bitmap) {
+
+        val file = File(getPuzzleDir(id), "result.png")
+
+        FileOutputStream(file).use { out ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+        }
+    }
+
+    fun exportPuzzle(id: String, outputUri: Uri, context: Context) {
+
+        val puzzleDir = getPuzzleDir(id)
+
+        val original = loadPuzzleData(id)!!
+
+        val rleBlocks = original.blocks.map { block ->
+            block.matrix.map { row ->
+                encodeRLE(row).map { RLE(it.color, it.count) }
+            }
+        }
+
+        val compressedBlocks = RLEBlocks(rleBlocks, original.palette)
+
+        val json = Json.encodeToString(compressedBlocks)
+
+        val resolver = context.contentResolver
+
+        resolver.openOutputStream(outputUri)?.use { outputStream ->
+            ZipOutputStream(BufferedOutputStream(outputStream)).use { zip ->
+
+                // 🔹 blocks.json
+//                val blocksFile = File(puzzleDir, "blocks.json")
+//                if (blocksFile.exists()) {
+//                    zip.putNextEntry(ZipEntry("blocks.json"))
+//                    zip.write(blocksFile.readBytes())
+//                    zip.closeEntry()
+//                }
+
+                zip.putNextEntry(ZipEntry("blocks.json"))
+                zip.write(json.toByteArray())
+                zip.closeEntry()
+
+                // 🔹 result.png
+                val resultFile = File(puzzleDir, "result.png")
+                if (resultFile.exists()) {
+                    zip.putNextEntry(ZipEntry("result.png"))
+                    zip.write(resultFile.readBytes())
+                    zip.closeEntry()
+                }
+            }
+        }
+    }
+
+    fun importPuzzle(uri: Uri, context: Context) {
+
+        val resolver = context.contentResolver
+
+        val newId = "puzzle_${System.currentTimeMillis()}"
+        val puzzleDir = getPuzzleDir(newId)
+
+        resolver.openInputStream(uri)?.use { inputStream ->
+            ZipInputStream(BufferedInputStream(inputStream)).use { zip ->
+
+                var entry: ZipEntry?
+
+                while (zip.nextEntry.also { entry = it } != null) {
+
+                    val file = File(puzzleDir, entry!!.name)
+
+                    FileOutputStream(file).use { out ->
+                        zip.copyTo(out)
+                    }
+
+                    zip.closeEntry()
+
+                    if (!entry.name.endsWith(".json") && !entry.name.endsWith(".png")) return
+                }
+            }
+        }
+
+        // 🔥 читаем blocks.json
+        val compressedData: RLEBlocks =
+            Json.decodeFromString(File(puzzleDir, "blocks.json").readText())
+
+        // 🔥 распаковываем RLE
+
+        val blocks:List<Block> = compressedData.blocks.map { block ->
+            Block(matrix = block.map {
+                decodeRLE(it)
+            },
+            usedColors = compressedData.palette
+            )
+        }
+
+        val decompressedBlocks = PuzzleData(
+            palette = compressedData.palette,
+            blocks = blocks
+        )
+
+        // 🔥 сохраняем уже нормальные данные обратно
+        savePuzzleData(newId, decompressedBlocks)
+
+        // 🔥 создаём новый meta
+        val meta = loadMeta().toMutableList()
+
+        meta.add(
+            PuzzleItem(
+                id = newId,
+                currentBlock = 0,
+                totalBlocks = decompressedBlocks.blocks.size
+            )
+        )
+
+        saveMeta(meta)
+    }
+
+    fun encodeRLE(row: List<Int>): List<RLE> {
+
+        if (row.isEmpty()) return emptyList()
+
+        val result = mutableListOf<RLE>()
+
+        var current = row[0]
+        var count = 1
+
+        for (i in 1 until row.size) {
+            if (row[i] == current) {
+                count++
+            } else {
+                result.add(RLE(current, count))
+                current = row[i]
+                count = 1
+            }
+        }
+
+        result.add(RLE(current, count))
+
+        return result
+    }
+
+    fun decodeRLE(data: List<RLE>): List<Int> {
+
+        val result = mutableListOf<Int>()
+
+        for ((value, count) in data) {
+            repeat(count) {
+                result.add(value)
+            }
+        }
+
+        return result
     }
 }

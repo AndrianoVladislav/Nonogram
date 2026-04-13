@@ -10,6 +10,9 @@ class Game(solution: Block) {
     var isVictory: Boolean = false
         private set
 
+    var isGameOver: Boolean = false
+        private set
+
     fun makeMove(row: Int, col: Int, selectedColor: Int, mode: InputMode): Boolean {
         if (lives <= 0) return false
 
@@ -20,6 +23,7 @@ class Game(solution: Block) {
             println("❌ Ошибка! Осталось жизней: $lives")
             if (lives <= 0) {
                 println("💀 Конец игры!")
+                isGameOver = true
             }
         } else {
             println("✅ Верный ход!")

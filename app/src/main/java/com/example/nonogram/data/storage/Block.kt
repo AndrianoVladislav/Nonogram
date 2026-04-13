@@ -1,10 +1,12 @@
 package com.example.nonogram.data.storage
 
 import androidx.compose.ui.graphics.Color
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class Block(
-    val matrix: ArrayList<IntArray>,
-    val usedColors: List<Color>
+    val matrix: List<List<Int>>,
+    val usedColors: List<Int>
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
