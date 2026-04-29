@@ -19,6 +19,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,6 +36,7 @@ import com.example.nonogram.data.storage.ImageLoader
 import com.example.nonogram.data.storage.PuzzleData
 import com.example.nonogram.data.storage.PuzzleItem
 import com.example.nonogram.data.storage.StorageManager
+import com.example.nonogram.domain.entity.SoundManager
 
 @RequiresApi(Build.VERSION_CODES.P)
 @Composable
@@ -44,6 +46,10 @@ fun UploadScreen(
 ) {
 
     val context = LocalContext.current
+    val soundManager = remember { SoundManager(context) }
+    DisposableEffect(Unit) {
+        onDispose { soundManager.release() }
+    }
 
     var isProcessing by remember { mutableStateOf(false) }
 
@@ -80,7 +86,9 @@ fun UploadScreen(
         ) {
 
             Button(
-                onClick = { imageLauncher.launch("image/*") },
+                onClick = {
+                    soundManager.playSwitch()
+                    imageLauncher.launch("image/*") },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !isProcessing
             ) {

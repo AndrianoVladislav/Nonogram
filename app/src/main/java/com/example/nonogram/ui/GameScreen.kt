@@ -1,10 +1,14 @@
 package com.example.nonogram.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,22 +22,32 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
@@ -41,11 +55,18 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.nonogram.data.storage.Block
 import com.example.nonogram.data.storage.StorageManager
 import com.example.nonogram.domain.entity.Game
 import com.example.nonogram.domain.entity.InputMode
+import com.example.nonogram.domain.entity.SoundManager
 import com.example.nonogram.ui.theme.NonogramTheme
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.max
+
+enum class DragDirection { NONE, HORIZONTAL, VERTICAL }
 
 @Composable
 fun GameScreen(
@@ -60,19 +81,29 @@ fun GameScreen(
     val board = game.board
     val grid = board.getPlayerGrid()
     val gridSize = grid.size
-
     val palette = game.block.usedColors
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
-    var selectedColor by remember { mutableIntStateOf(0) }
+    val soundManager = remember { SoundManager(context) }
+    DisposableEffect(Unit) {
+        onDispose { soundManager.release() }
+    }
+
+    var selectedColor by remember { mutableIntStateOf(1.coerceAtMost(palette.size - 1)) }
     var fillMode by remember { mutableStateOf(true) } // ON = FILL
     var tick by remember { mutableIntStateOf(0) }
     var showWinDialog by remember { mutableStateOf(false) }
     var showLoseDialog by remember { mutableStateOf(false) }
 
+    // Map to store scale animations for each cell
+    val cellScales = remember { mutableStateMapOf<Int, Animatable<Float, AnimationVector1D>>() }
+
+
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
 
-    val topSpacer = screenHeight * 0.05f
+    val topSpacer = screenHeight * 0.02f
     val leftHintsWidth = screenWidth * 0.15f
     val fieldWidth = screenWidth * 0.80f
 
@@ -84,6 +115,16 @@ fun GameScreen(
             .padding(10.dp, 10.dp, 0.dp, 10.dp)
             .fillMaxSize()
     ) {
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            key(tick) {
+                LivesDisplay(lives = game.lives, soundManager)
+            }
+        }
 
         Spacer(modifier = Modifier.height(topSpacer))
 
@@ -120,6 +161,7 @@ fun GameScreen(
                             color = android.graphics.Color.WHITE
                             textAlign = android.graphics.Paint.Align.CENTER
                             textSize = px / 2
+                            isFakeBoldText = true
                         }
                     )
                 }
@@ -176,6 +218,7 @@ fun GameScreen(
                                     color = android.graphics.Color.WHITE
                                     textAlign = android.graphics.Paint.Align.CENTER
                                     textSize = px / 2
+                                    isFakeBoldText = true
                                 }
                             )
                         }
@@ -187,57 +230,155 @@ fun GameScreen(
             Canvas(
                 modifier = Modifier
                     .size(fieldWidth)
-                    .pointerInput(selectedColor, fillMode) {
+                    .pointerInput(gridSize, selectedColor, fillMode, game.isGameOver) {
+                        if (game.isGameOver) return@pointerInput
 
-                        detectDragGestures(
-                            onDragStart = { offset ->
-                                handleTouch(
-                                    offset,
-                                    cellSize.toPx(),
-                                    gridSize,
-                                    game,
-                                    selectedColor,
-                                    fillMode
-                                )
-                                tick++
-                            },
-                            onDrag = { change, _ ->
-                                handleTouch(
-                                    change.position,
-                                    cellSize.toPx(),
-                                    gridSize,
-                                    game,
-                                    selectedColor,
-                                    fillMode
-                                )
-                                tick++
+                        val px = cellSize.toPx()
+                        awaitEachGesture {
+                            val down = awaitFirstDown()
+                            var lastCell: Pair<Int, Int>? = null
+                            var startCell: Pair<Int, Int>? = null
+                            var direction = DragDirection.NONE
+                            var isCurrentGestureValid = true
+
+                            fun process(position: Offset) {
+                                if (!isCurrentGestureValid || game.isGameOver) return
+
+                                val rawCol = (position.x / px).toInt().coerceIn(0, gridSize - 1)
+                                val rawRow = (position.y / px).toInt().coerceIn(0, gridSize - 1)
+
+                                if (startCell == null) startCell = rawRow to rawCol
+
+                                val (sRow, sCol) = startCell!!
+
+                                // Определение направления (фиксация оси)
+                                if (direction == DragDirection.NONE) {
+                                    val dr = abs(rawRow - sRow)
+                                    val dc = abs(rawCol - sCol)
+                                    if (dr > 0 || dc > 0) {
+                                        direction = if (dr > dc) DragDirection.VERTICAL else DragDirection.HORIZONTAL
+                                    }
+                                }
+
+                                // Привязка к оси
+                                val targetCell = when (direction) {
+                                    DragDirection.HORIZONTAL -> sRow to rawCol
+                                    DragDirection.VERTICAL -> rawRow to sCol
+                                    DragDirection.NONE -> rawRow to rawCol
+                                }
+
+                                if (targetCell != lastCell) {
+                                    val (tRow, tCol) = targetCell
+                                    val (pRow, pCol) = lastCell ?: targetCell
+
+                                    // Интерполяция (заполнение всех клеток в линии)
+                                    val steps = max(abs(tRow - pRow), abs(tCol - pCol))
+                                    for (i in 0..steps) {
+                                        val r = if (steps == 0) pRow else pRow + (tRow - pRow) * i / steps
+                                        val c = if (steps == 0) pCol else pCol + (tCol - pCol) * i / steps
+
+                                        // Не обрабатываем одну и ту же клетку дважды за одно движение
+                                        if (i == 0 && lastCell != null) continue
+
+                                        val mode = if (fillMode) InputMode.FILL else InputMode.NOTE
+                                        val wasEmpty = grid[r][c].color == null
+
+                                        if (!game.makeMove(r, c, selectedColor, mode)) {
+                                            isCurrentGestureValid = false
+                                            soundManager.playHeartBreak()
+                                            tick++
+                                            break
+                                        }
+
+                                        // Start animation if a new cell was filled
+                                        if (wasEmpty && grid[r][c].color != null) {
+                                            soundManager.playCorrect()
+                                            val cellId = r * gridSize + c
+                                            scope.launch {
+                                                val anim = Animatable(0.5f)
+                                                cellScales[cellId] = anim
+                                                anim.animateTo(1f, tween(300))
+                                            }
+                                        }
+
+                                        tick++
+                                    }
+                                    lastCell = targetCell
+                                }
                             }
-                        )
+
+                            process(down.position)
+
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                if (event.changes.all { !it.pressed }) break
+                                event.changes.forEach { change ->
+                                    process(change.position)
+                                    change.consume()
+                                }
+                            }
+                        }
                     }
             ) {
 
-                if (game.isVictory)
-                    showWinDialog = true
+                if (game.isVictory) showWinDialog = true
+                if (game.isGameOver) showLoseDialog = true
 
-                if (game.isGameOver) {
-                    showLoseDialog = true
-                }
-
+                // Mřížka
+                val px = cellSize.toPx()
                 tick.let { _ ->
                     for (row in 0 until gridSize) {
                         for (col in 0 until gridSize) {
 
                             val cell = grid[row][col]
 
-                            val x = col * cellSize.toPx()
-                            val y = row * cellSize.toPx()
+                            val x = col * px
+                            val y = row * px
 
-                            // Základní barva
-                            cell.color?.let {
+                            cell.color?.let { colorIdx ->
+                                val cellId = row * gridSize + col
+                                val scaleVal = cellScales[cellId]?.value ?: 1f
+                                val mainColor = Color(palette[colorIdx])
+
+                                // Draw volumetric cell
+                                val animatedSize = px * scaleVal
+                                val offset = (px - animatedSize) / 2
+                                val rectTopLeft = Offset(x + offset, y + offset)
+                                val rectSize = Size(animatedSize, animatedSize)
+
+                                // 3D Effect using paths for edges
+                                val shadow = mainColor.darken(0.3f)
+                                val highlight = mainColor.lighten(0.3f)
+
+                                // Bottom/Right shadow
+                                val pathShadow = Path().apply {
+                                    moveTo(rectTopLeft.x + rectSize.width, rectTopLeft.y)
+                                    lineTo(rectTopLeft.x + rectSize.width, rectTopLeft.y + rectSize.height)
+                                    lineTo(rectTopLeft.x, rectTopLeft.y + rectSize.height)
+                                    lineTo(rectTopLeft.x + 4, rectTopLeft.y + rectSize.height - 4)
+                                    lineTo(rectTopLeft.x + rectSize.width - 4, rectTopLeft.y + rectSize.height - 4)
+                                    lineTo(rectTopLeft.x + rectSize.width - 4, rectTopLeft.y + 4)
+                                    close()
+                                }
+                                drawPath(pathShadow, shadow)
+
+                                // Top/Left highlight
+                                val pathHighlight = Path().apply {
+                                    moveTo(rectTopLeft.x, rectTopLeft.y)
+                                    lineTo(rectTopLeft.x + rectSize.width, rectTopLeft.y)
+                                    lineTo(rectTopLeft.x + rectSize.width - 4, rectTopLeft.y + 4)
+                                    lineTo(rectTopLeft.x + 4, rectTopLeft.y + 4)
+                                    lineTo(rectTopLeft.x + 4, rectTopLeft.y + rectSize.height - 4)
+                                    lineTo(rectTopLeft.x, rectTopLeft.y + rectSize.height)
+                                    close()
+                                }
+                                drawPath(pathHighlight, highlight)
+
+                                // Main face
                                 drawRect(
-                                    color = Color(palette[it]),
-                                    topLeft = Offset(x, y),
-                                    size = Size(cellSize.toPx(), cellSize.toPx())
+                                    color = mainColor,
+                                    topLeft = Offset(rectTopLeft.x + 4, rectTopLeft.y + 4),
+                                    size = Size(rectSize.width - 8, rectSize.height - 8)
                                 )
                             }
 
@@ -260,9 +401,6 @@ fun GameScreen(
                         }
                     }
                 }
-
-                // Mřížka
-                val px = cellSize.toPx()
 
                 // Svislé čáry
                 for (i in 0..gridSize) {
@@ -303,7 +441,7 @@ fun GameScreen(
         ) {
 
             // Paleta
-            Row {
+            Row (horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 palette.forEachIndexed { index, color ->
                     Box(
                         modifier = Modifier
@@ -312,21 +450,28 @@ fun GameScreen(
                             .background(Color(color))
                             .border(
                                 width = if (selectedColor == index) 3.dp else 1.dp,
-                                color = Color.Black
+                                color = if (selectedColor == index) Color.Black else Color.Gray
                             )
-                            .clickable { selectedColor = index }
+                            .clickable {
+                                soundManager.playSwitch()
+                                selectedColor = index
+                            }
                     )
                 }
             }
 
             // Switch
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("NOTE")
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("FILL", fontSize = 10.sp, color = if (fillMode) Color.Black else Color.Gray)
                 Switch(
-                    checked = fillMode,
-                    onCheckedChange = { fillMode = it }
+                    checked = !fillMode, // Swapped logic to match "Vertical" feel if needed, but let's keep it simple
+                    onCheckedChange = {
+                        soundManager.playSwitch()
+                        fillMode = !it
+                    },
+                    modifier = Modifier.rotate(90f).padding(vertical = 8.dp)
                 )
-                Text("FILL")
+                Text("NOTE", fontSize = 10.sp, color = if (!fillMode) Color.Black else Color.Gray)
             }
         }
     }
@@ -340,7 +485,7 @@ fun GameScreen(
 
             confirmButton = {
                 Button(onClick = {
-
+                    soundManager.playSwitch()
                     val puzzle = storageManager
                         .loadMeta()
                         .first { it.id == puzzleId }
@@ -363,7 +508,7 @@ fun GameScreen(
 
             dismissButton = {
                 Button(onClick = {
-
+                    soundManager.playSwitch()
                     val puzzle = storageManager
                         .loadMeta()
                         .first { it.id == puzzleId }
@@ -391,8 +536,9 @@ fun GameScreen(
 
             confirmButton = {
                 Button(onClick = {
-
+                    soundManager.playSwitch()
                     showLoseDialog = false
+                    cellScales.clear()
                     onRestart()
 
                 }) {
@@ -402,6 +548,7 @@ fun GameScreen(
 
             dismissButton = {
                 Button(onClick = {
+                    soundManager.playSwitch()
                     showLoseDialog = false
                     onExit()
 
@@ -413,27 +560,60 @@ fun GameScreen(
     }
 }
 
-private fun handleTouch(
-    offset: Offset,
-    cellSize: Float,
-    size: Int,
-    game: Game,
-    selectedColor: Int,
-    fillMode: Boolean
-) {
+@Composable
+fun HeartIcon(filled: Boolean, soundManager: SoundManager?) {
+    var previousFilled by remember { mutableStateOf(filled) }
+    val scale = remember { Animatable(1f) }
 
-    val col = (offset.x / cellSize).toInt()
-    val row = (offset.y / cellSize).toInt()
+    LaunchedEffect(filled) {
+        if (previousFilled && !filled) {
+            // Heart breaking animation
+//            soundManager?.playHeartBreak()
+            scale.animateTo(1.5f, animationSpec = tween(100))
+            scale.animateTo(0f, animationSpec = tween(300))
+        } else if (!previousFilled && filled) {
+            // Reset scale if restarted
+            scale.snapTo(1f)
+        }
+        previousFilled = filled
+    }
 
-    if (row in 0 until size && col in 0 until size) {
+    Icon(
+        imageVector = Icons.Filled.Favorite,
+        contentDescription = null,
+        modifier = Modifier
+            .size(32.dp)
+            .scale(if (filled) 1f else scale.value),
+        tint = if (filled) Color.Red else Color.Gray.copy(alpha = 0.5f)
+    )
+}
 
-        val mode = if (fillMode) InputMode.FILL else InputMode.NOTE
-
-        val success = game.makeMove(row, col, selectedColor, mode)
-
-        if (!success) return
+@Composable
+fun LivesDisplay(lives: Int, soundManager: SoundManager?) {
+    Row(
+        modifier = Modifier.padding(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        repeat(3) { i ->
+            HeartIcon(filled = i < lives, soundManager)
+        }
     }
 }
+
+// Helper to darken/lighten colors for 3D effect
+fun Color.darken(factor: Float = 0.2f): Color = Color(
+    red = red * (1 - factor),
+    green = green * (1 - factor),
+    blue = blue * (1 - factor),
+    alpha = alpha
+)
+
+fun Color.lighten(factor: Float = 0.2f): Color = Color(
+    red = red + (1 - red) * factor,
+    green = green + (1 - green) * factor,
+    blue = blue + (1 - blue) * factor,
+    alpha = alpha
+)
 
 @Preview(showBackground = true)
 @Composable
@@ -452,15 +632,11 @@ fun GameScreenPreview() {
         )
     )
 
-    fun reload(): Boolean {
-        return true
-    }
-
     val game = Game(block)
     NonogramTheme {
         GameScreen(
             game = game,
-            onExit = { reload() },
+            onExit = { true },
             onNextBlock = {},
             onRestart = {},
             puzzleId = "123",

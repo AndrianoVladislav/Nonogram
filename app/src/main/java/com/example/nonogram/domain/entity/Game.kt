@@ -6,7 +6,8 @@ class Game(solution: Block) {
 
     val block = solution
     val board: Board = Board(block)
-    private var lives: Int = 3
+    var lives: Int = 3
+        private set
     var isVictory: Boolean = false
         private set
 
@@ -14,7 +15,7 @@ class Game(solution: Block) {
         private set
 
     fun makeMove(row: Int, col: Int, selectedColor: Int, mode: InputMode): Boolean {
-        if (lives <= 0) return false
+        if (lives <= 0 || isVictory || isGameOver) return false
 
         val correct = board.checkMove(row, col, selectedColor, mode)
 
@@ -25,6 +26,7 @@ class Game(solution: Block) {
                 println("X Konec hry!")
                 isGameOver = true
             }
+            return false // Return false if it was a mistake
         } else {
             println("Správný tah!")
             if (board.isSolved()) {
@@ -33,7 +35,7 @@ class Game(solution: Block) {
             }
         }
         print(" $col, $row ")
-        return true
+        return true // Return true if it was correct
     }
 
     fun getStatus(): String {

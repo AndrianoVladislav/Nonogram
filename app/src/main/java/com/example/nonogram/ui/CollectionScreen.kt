@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.nonogram.data.storage.PuzzleItem
 import com.example.nonogram.data.storage.StorageManager
+import com.example.nonogram.domain.entity.SoundManager
 
 @Composable
 fun CollectionScreen(
@@ -42,6 +44,12 @@ fun CollectionScreen(
     onSend: (PuzzleItem) -> Unit,
     onUpload: () -> Unit
 ) {
+    val context = LocalContext.current
+
+    val soundManager = remember { SoundManager(context) }
+    DisposableEffect(Unit) {
+        onDispose { soundManager.release() }
+    }
 
     var selected by remember { mutableStateOf<PuzzleItem?>(null) }
 
@@ -67,7 +75,10 @@ fun CollectionScreen(
                     puzzle = puzzle,
                     storageManager = storageManager,
                     isSelected = selected?.id == puzzle.id,
-                    onClick = { selected = puzzle }
+                    onClick = {
+                        soundManager.playSwitch()
+                        selected = puzzle
+                    }
                 )
             }
         }
