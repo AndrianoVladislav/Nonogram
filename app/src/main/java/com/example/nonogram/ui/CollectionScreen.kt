@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -59,6 +60,8 @@ fun CollectionScreen(
     val topSpacer = screenHeight * 0.75f
 
     Column(modifier = Modifier.fillMaxSize()) {
+
+        Spacer(modifier = Modifier.height(screenHeight * 0.05f))
 
         // Seznam (75%)
         LazyColumn(

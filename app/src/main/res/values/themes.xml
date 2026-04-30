@@ -2,4 +2,18 @@
 <resources>
 
     <style name="Theme.Nonogram" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <!-- Фон за иконкой -->
+        <item name="windowSplashScreenBackground">#FFFFFF</item>
+
+        <!-- Ваша анимация (AVD) -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/beach_anim</item>
+
+        <!-- Длительность анимации (до 1000мс рекомендуется) -->
+        <item name="windowSplashScreenAnimationDuration">1000</item>
+
+        <!-- Тема, которая применится после загрузки -->
+        <item name="postSplashScreenTheme">@style/Theme.Nonogram</item>
+    </style>
 </resources>

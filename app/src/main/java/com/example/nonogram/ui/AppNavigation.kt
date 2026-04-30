@@ -2,10 +2,11 @@ package com.example.nonogram.ui
 
 import android.os.Build
 import androidx.annotation.RequiresApi
-import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -17,10 +18,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.nonogram.R
 import com.example.nonogram.data.storage.PuzzleItem
 import com.example.nonogram.data.storage.StorageManager
 import com.example.nonogram.domain.entity.Game
@@ -42,17 +46,26 @@ fun AppNavigation(
         onDispose { soundManager.release() }
     }
 
-    NavHost(
-        navController = navController,
-        startDestination = "start",
-        enterTransition = { fadeIn(animationSpec = tween(700)) },
-        exitTransition = { fadeOut(animationSpec = tween(700)) },
-        popEnterTransition = { fadeIn(animationSpec = tween(700)) },
-        popExitTransition = { fadeOut(animationSpec = tween(700)) }
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Фоновое изображение (замените R.drawable.bg_main на ваше имя файла)
+        Image(
+            painter = painterResource(id = R.drawable.bg_main),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop // Заполняет весь экран, обрезая лишнее
+        )
 
-        composable("start") {
-            Surface(color = Color(0xFF1565C0), modifier = Modifier.fillMaxSize()) {
+        NavHost(
+            navController = navController,
+            startDestination = "start",
+            modifier = Modifier.fillMaxSize(),
+            enterTransition = { fadeIn(animationSpec = tween(700)) },
+            exitTransition = { fadeOut(animationSpec = tween(700)) },
+            popEnterTransition = { fadeIn(animationSpec = tween(700)) },
+            popExitTransition = { fadeOut(animationSpec = tween(700)) }
+        ) {
+
+            composable("start") {
                 StartScreen(
                     onCollectionClick = {
                         soundManager.playSwitch()
@@ -63,13 +76,11 @@ fun AppNavigation(
                     }
                 )
             }
-        }
 
-        composable("collection") {
-            LaunchedEffect(Unit) {
-                onDataChanged()
-            }
-            Surface(color = Color.White, modifier = Modifier.fillMaxSize()) {
+            composable("collection") {
+                LaunchedEffect(Unit) {
+                    onDataChanged()
+                }
                 CollectionScreen(
                     puzzles = puzzles,
                     storageManager = storageManager,
@@ -87,48 +98,49 @@ fun AppNavigation(
                     }
                 )
             }
-        }
 
-        composable("game/{id}") { backStack ->
-            val id = backStack.arguments?.getString("id")!!
-            val puzzle = remember(id) {
-                storageManager.loadMeta().first { it.id == id }
+            composable("game/{id}") { backStack ->
+                val id = backStack.arguments?.getString("id")!!
+                val puzzle = remember(id) {
+                    storageManager.loadMeta().first { it.id == id }
+                }
+
+                var currentBlock by remember {
+                    mutableIntStateOf(puzzle.currentBlock)
+                }
+                var restartKey by remember { mutableIntStateOf(0) }
+                val block = remember(id, currentBlock) {
+                    storageManager.loadBlock(id, currentBlock)!!
+                }
+
+                val game = remember(block, restartKey) {
+                    Game(block)
+                }
+
+                Surface(
+                    color = Color.Transparent,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    GameScreen(
+                        game = game,
+                        puzzleId = id,
+                        storageManager = storageManager,
+                        onNextBlock = {
+                            currentBlock++
+                        },
+                        onRestart = {
+                            restartKey++
+                        },
+                        onExit = {
+                            soundManager.playSwitch()
+                            onDataChanged()
+                            navController.popBackStack()
+                        }
+                    )
+                }
             }
 
-            var currentBlock by remember {
-                mutableIntStateOf(puzzle.currentBlock)
-            }
-            var restartKey by remember { mutableIntStateOf(0) }
-            val block = remember(id, currentBlock) {
-                storageManager.loadBlock(id, currentBlock)!!
-            }
-
-            val game = remember(block, restartKey) {
-                Game(block)
-            }
-
-            Surface(color = Color.White, modifier = Modifier.fillMaxSize()) {
-                GameScreen(
-                    game = game,
-                    puzzleId = id,
-                    storageManager = storageManager,
-                    onNextBlock = {
-                        currentBlock++
-                    },
-                    onRestart = {
-                        restartKey++
-                    },
-                    onExit = {
-                        soundManager.playSwitch()
-                        onDataChanged()
-                        navController.popBackStack()
-                    }
-                )
-            }
-        }
-
-        composable("upload") {
-            Surface(color = Color.White, modifier = Modifier.fillMaxSize()) {
+            composable("upload") {
                 UploadScreen(
                     storageManager = storageManager,
                     onPuzzleCreated = {
@@ -138,11 +150,9 @@ fun AppNavigation(
                     }
                 )
             }
-        }
 
-        composable("send/{id}") { backStack ->
-            val id = backStack.arguments?.getString("id")!!
-            Surface(color = Color.White, modifier = Modifier.fillMaxSize()) {
+            composable("send/{id}") { backStack ->
+                val id = backStack.arguments?.getString("id")!!
                 SendScreen(
                     puzzleId = id,
                     storageManager = storageManager,

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="360dp"
+    android:height="640dp"
+    android:viewportWidth="360"
+    android:viewportHeight="640">
+
+    <!-- 🌅 СЦЕНА -->
+    <group
+        android:name="scene"
+        android:pivotX="180"
+        android:pivotY="320"
+        android:scaleX="0.7"
+        android:scaleY="0.7">
+
+        <!-- небо -->
+        <path
+            android:fillColor="#87CEEB"
+            android:pathData="M0,0 L360,0 L360,400 L0,400 Z"/>
+
+        <!-- море -->
+        <path
+            android:fillColor="#4FC3F7"
+            android:pathData="M0,400 L360,400 L360,520 L0,520 Z"/>
+
+        <!-- пляж -->
+        <path
+            android:fillColor="#FFE082"
+            android:pathData="M0,520 L360,520 L360,640 L0,640 Z"/>
+
+        <!-- солнце -->
+        <path
+            android:name="sun"
+            android:fillColor="#FFD54F"
+            android:pathData="M180,400 m-30,0 a30,30 0 1,0 60,0 a30,30 0 1,0 -60,0"/>
+    </group>
+
+    <!-- 🌴 ЛЕВОЕ ДЕРЕВО -->
+    <group
+        android:name="tree_left"
+        android:translationX="0dp">
+
+        <path
+            android:fillColor="#2E7D32"
+            android:pathData="M0,0 L140,0 L120,640 L0,640 Z"/>
+    </group>
+
+    <!-- 🌴 ПРАВОЕ ДЕРЕВО -->
+    <group
+        android:name="tree_right"
+        android:translationX="0dp">
+
+        <path
+            android:fillColor="#1B5E20"
+            android:pathData="M360,0 L220,0 L240,640 L360,640 Z"/>
+    </group>
+
+</vector>
