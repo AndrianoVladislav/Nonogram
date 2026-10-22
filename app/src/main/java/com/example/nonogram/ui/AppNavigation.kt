@@ -1,7 +1,5 @@
 package com.example.nonogram.ui
 
-import android.os.Build
-import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -12,32 +10,32 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.nonogram.R
-import com.example.nonogram.data.storage.PuzzleItem
-import com.example.nonogram.data.storage.StorageManager
-import com.example.nonogram.domain.entity.Game
-import com.example.nonogram.domain.entity.SoundManager
+import com.example.nonogram.data.repository.PuzzleRepositoryImpl
+import com.example.nonogram.data.sound.SoundManager
+import com.example.nonogram.domain.repository.PuzzleRepository
+import com.example.nonogram.ui.viewmodel.AppViewModelFactory
+import com.example.nonogram.ui.viewmodel.CollectionViewModel
+import com.example.nonogram.ui.viewmodel.GameViewModel
+import com.example.nonogram.ui.viewmodel.SendViewModel
+import com.example.nonogram.ui.viewmodel.UploadViewModel
 
-@RequiresApi(Build.VERSION_CODES.P)
 @Composable
-fun AppNavigation(
-    puzzles: List<PuzzleItem>,
-    storageManager: StorageManager,
-    onDataChanged: () -> Unit
-) {
+fun AppNavigation() {
     val context = LocalContext.current
+
+    val repository: PuzzleRepository = remember(context) { PuzzleRepositoryImpl(context) }
+    val viewModelFactory = remember(repository) { AppViewModelFactory(repository) }
 
     val navController = rememberNavController()
     val soundManager = remember { SoundManager(context) }
@@ -47,12 +45,11 @@ fun AppNavigation(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Фоновое изображение (замените R.drawable.bg_main на ваше имя файла)
         Image(
             painter = painterResource(id = R.drawable.bg_main),
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop // Заполняет весь экран, обрезая лишнее
+            contentScale = ContentScale.Crop
         )
 
         NavHost(
@@ -78,12 +75,9 @@ fun AppNavigation(
             }
 
             composable("collection") {
-                LaunchedEffect(Unit) {
-                    onDataChanged()
-                }
+                val viewModel: CollectionViewModel = viewModel(factory = viewModelFactory)
                 CollectionScreen(
-                    puzzles = puzzles,
-                    storageManager = storageManager,
+                    viewModel = viewModel,
                     onPlay = { puzzle ->
                         soundManager.playSwitch()
                         navController.navigate("game/${puzzle.id}")
@@ -101,20 +95,10 @@ fun AppNavigation(
 
             composable("game/{id}") { backStack ->
                 val id = backStack.arguments?.getString("id")!!
-                val puzzle = remember(id) {
-                    storageManager.loadMeta().first { it.id == id }
-                }
+                val viewModel: GameViewModel = viewModel(factory = viewModelFactory)
 
-                var currentBlock by remember {
-                    mutableIntStateOf(puzzle.currentBlock)
-                }
-                var restartKey by remember { mutableIntStateOf(0) }
-                val block = remember(id, currentBlock) {
-                    storageManager.loadBlock(id, currentBlock)!!
-                }
-
-                val game = remember(block, restartKey) {
-                    Game(block)
+                LaunchedEffect(id) {
+                    viewModel.loadGame(id)
                 }
 
                 Surface(
@@ -122,18 +106,9 @@ fun AppNavigation(
                     modifier = Modifier.fillMaxSize()
                 ) {
                     GameScreen(
-                        game = game,
-                        puzzleId = id,
-                        storageManager = storageManager,
-                        onNextBlock = {
-                            currentBlock++
-                        },
-                        onRestart = {
-                            restartKey++
-                        },
+                        viewModel = viewModel,
                         onExit = {
                             soundManager.playSwitch()
-                            onDataChanged()
                             navController.popBackStack()
                         }
                     )
@@ -141,11 +116,11 @@ fun AppNavigation(
             }
 
             composable("upload") {
+                val viewModel: UploadViewModel = viewModel(factory = viewModelFactory)
                 UploadScreen(
-                    storageManager = storageManager,
+                    viewModel = viewModel,
                     onPuzzleCreated = {
                         soundManager.playSwitch()
-                        onDataChanged()
                         navController.popBackStack()
                     }
                 )
@@ -153,9 +128,11 @@ fun AppNavigation(
 
             composable("send/{id}") { backStack ->
                 val id = backStack.arguments?.getString("id")!!
+                val viewModel: SendViewModel = viewModel(factory = viewModelFactory)
+
                 SendScreen(
                     puzzleId = id,
-                    storageManager = storageManager,
+                    viewModel = viewModel,
                     onDone = {
                         soundManager.playSwitch()
                         navController.popBackStack()

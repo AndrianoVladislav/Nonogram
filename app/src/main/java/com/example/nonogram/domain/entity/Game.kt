@@ -2,12 +2,13 @@ package com.example.nonogram.domain.entity
 
 import com.example.nonogram.data.storage.Block
 
-class Game(solution: Block) {
+class Game(val block: Block) {
 
-    val block = solution
     val board: Board = Board(block)
+
     var lives: Int = 3
         private set
+
     var isVictory: Boolean = false
         private set
 
@@ -21,25 +22,19 @@ class Game(solution: Block) {
 
         if (!correct) {
             lives--
-            println("X Chyba! Zbývající životy: $lives")
             if (lives <= 0) {
-                println("X Konec hry!")
                 isGameOver = true
             }
-            return false // Return false if it was a mistake
+            return false
         } else {
-            println("Správný tah!")
             if (board.isSolved()) {
                 isVictory = true
-                println("Win!")
             }
         }
-        print(" $col, $row ")
-        return true // Return true if it was correct
+        return true
     }
 
     fun getStatus(): String {
         return "Životy: $lives, Zbývající buňky: ${board.remainingCells}"
     }
 }
-

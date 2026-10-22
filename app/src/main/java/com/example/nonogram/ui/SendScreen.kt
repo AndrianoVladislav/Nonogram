@@ -17,50 +17,29 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.example.nonogram.data.storage.StorageManager
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.nonogram.ui.viewmodel.SendViewModel
 import kotlinx.coroutines.delay
 
 @Composable
 fun SendScreen(
     puzzleId: String,
-    storageManager: StorageManager,
+    viewModel: SendViewModel,
     onDone: () -> Unit
 ) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    val context = LocalContext.current
-
-    var isExporting by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf<String?>(null) }
-
-    val createFileLauncher =
-        rememberLauncherForActivityResult(
-            ActivityResultContracts.CreateDocument("application/zip")
-        ) { uri ->
-
-            uri?.let {
-                isExporting = true
-
-                try {
-                    storageManager.exportPuzzle(puzzleId, it, context)
-                    message = "Export úspěšný"
-                } catch (e: Exception) {
-                    message = "Chyba při exportu"
-                }
-
-                isExporting = false
-            }
-        }
+    val createFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        uri?.let { viewModel.exportPuzzle(puzzleId, it) }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -68,12 +47,11 @@ fun SendScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-
             Button(
                 onClick = {
                     createFileLauncher.launch("puzzle.zip")
                 },
-                enabled = !isExporting,
+                enabled = !uiState.isExporting,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Exportovat puzzle")
@@ -89,7 +67,7 @@ fun SendScreen(
             }
         }
 
-        if (isExporting) {
+        if (uiState.isExporting) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -100,10 +78,10 @@ fun SendScreen(
             }
         }
 
-        message?.let {
-            LaunchedEffect(it) {
+        uiState.message?.let { msg ->
+            LaunchedEffect(msg) {
                 delay(1500)
-                message = null
+                viewModel.clearMessage()
             }
 
             Box(
@@ -113,7 +91,7 @@ fun SendScreen(
                     .background(Color.Black)
                     .padding(12.dp)
             ) {
-                Text(it, color = Color.White)
+                Text(msg, color = Color.White)
             }
         }
     }

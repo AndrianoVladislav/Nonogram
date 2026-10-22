@@ -18,52 +18,67 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.nonogram.data.sound.SoundManager
 import com.example.nonogram.data.storage.PuzzleItem
-import com.example.nonogram.data.storage.StorageManager
-import com.example.nonogram.domain.entity.SoundManager
+import com.example.nonogram.ui.viewmodel.CollectionViewModel
 
 @Composable
 fun CollectionScreen(
-    puzzles: List<PuzzleItem>,
-    storageManager: StorageManager,
+    viewModel: CollectionViewModel,
     onPlay: (PuzzleItem) -> Unit,
     onSend: (PuzzleItem) -> Unit,
     onUpload: () -> Unit
 ) {
     val context = LocalContext.current
-
     val soundManager = remember { SoundManager(context) }
     DisposableEffect(Unit) {
         onDispose { soundManager.release() }
     }
 
-    var selected by remember { mutableStateOf<PuzzleItem?>(null) }
+    LaunchedEffect(Unit) {
+        viewModel.loadPuzzles()
+    }
 
-    val sorted = puzzles.sortedBy { it.currentBlock == it.totalBlocks }
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val selected = uiState.selectedPuzzle
+    val sortedPuzzles = remember(uiState.puzzles) {
+        uiState.puzzles.sortedBy { it.currentBlock == it.totalBlocks }
+    }
 
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val topSpacer = screenHeight * 0.75f
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    if (uiState.isLoading && uiState.puzzles.isEmpty()) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = Color.White)
+        }
+        return
+    }
 
+    Column(modifier = Modifier.fillMaxSize()) {
         Spacer(modifier = Modifier.height(screenHeight * 0.05f))
 
-        // Seznam (75%)
         LazyColumn(
             modifier = Modifier
                 .height(topSpacer)
@@ -71,31 +86,27 @@ fun CollectionScreen(
                 .padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-
-            items(sorted) { puzzle ->
-
+            items(sortedPuzzles) { puzzle ->
                 PuzzleItemView(
                     puzzle = puzzle,
-                    storageManager = storageManager,
+                    viewModel = viewModel,
                     isSelected = selected?.id == puzzle.id,
                     onClick = {
                         soundManager.playSwitch()
-                        selected = puzzle
+                        viewModel.selectPuzzle(puzzle)
                     }
                 )
             }
         }
 
-        // Panel tlačítek (25%)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(screenHeight - topSpacer)
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
+            horizontalArrangement = Arrangement.Center
         ) {
-
             Button(
                 onClick = {
                     if (selected?.currentBlock != selected?.totalBlocks) {
@@ -115,7 +126,7 @@ fun CollectionScreen(
             }
 
             Button(
-                onClick = onUpload,
+                onClick = onUpload
             ) {
                 Text("Nahrát")
             }
@@ -126,27 +137,19 @@ fun CollectionScreen(
 @Composable
 fun PuzzleItemView(
     puzzle: PuzzleItem,
-    storageManager: StorageManager,
+    viewModel: CollectionViewModel,
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-
-    LocalContext.current
-
-    val resultFile = remember {
-        storageManager.getResultImage(puzzle.id)
-    }
-
-    val isCompleted = puzzle.currentBlock >= puzzle.totalBlocks
-
-    val bitmap = remember(resultFile) {
-        if (resultFile.exists()) {
-            BitmapFactory.decodeFile(resultFile.absolutePath)?.asImageBitmap()
+    val bitmapState = produceState<ImageBitmap?>(initialValue = null, puzzle.id) {
+        val file = viewModel.getResultImageFile(puzzle.id)
+        value = if (file.exists()) {
+            BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
         } else null
     }
 
-    val progress =
-        puzzle.currentBlock.toFloat() / puzzle.totalBlocks
+    val isCompleted = puzzle.currentBlock >= puzzle.totalBlocks
+    val progress = puzzle.currentBlock.toFloat() / puzzle.totalBlocks
 
     Box(
         modifier = Modifier
@@ -158,17 +161,13 @@ fun PuzzleItemView(
             )
             .clickable { onClick() }
     ) {
-
-        if (isCompleted && bitmap != null) {
-
+        if (isCompleted && bitmapState.value != null) {
             Image(
-                bitmap = bitmap,
+                bitmap = bitmapState.value!!,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize()
             )
-
         } else {
-
             Box(
                 modifier = Modifier
                     .fillMaxSize()

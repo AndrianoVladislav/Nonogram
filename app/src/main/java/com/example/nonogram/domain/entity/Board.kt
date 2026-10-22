@@ -1,28 +1,21 @@
 package com.example.nonogram.domain.entity
 
-import androidx.compose.runtime.mutableStateOf
 import com.example.nonogram.data.storage.Block
 import com.example.nonogram.data.storage.Hint
-import com.example.nonogram.data.storage.PlayerCell
 
 class Board(private val block: Block) {
 
-    private val size = block.matrix.size
+    val size: Int = block.matrix.size
 
-    val playerGrid = mutableStateOf(Array(size) { Array(size) { PlayerCell() } })
+    private var _playerGrid: List<List<PlayerCell>> = List(size) { List(size) { PlayerCell() } }
+    val playerGrid: List<List<PlayerCell>>
+        get() = _playerGrid
 
-    var remainingCells: Int = 0
+    var remainingCells: Int = size * size
         private set
 
-    val rowHints: List<List<Hint>> =
-        block.matrix.map { getRowHints(it) }
-
-    val colHints: List<List<Hint>> =
-        List(block.matrix.size) { col -> getColumnHints(col) }
-
-    init {
-        remainingCells = size * size
-    }
+    val rowHints: List<List<Hint>> = block.matrix.map { getRowHints(it) }
+    val colHints: List<List<Hint>> = List(size) { col -> getColumnHints(col) }
 
     fun checkMove(
         row: Int,
@@ -30,18 +23,12 @@ class Board(private val block: Block) {
         selectedColor: Int,
         mode: InputMode
     ): Boolean {
-
-        val cell = playerGrid.value[row][col]
-
-        when (mode) {
-
-            InputMode.FILL -> {
-                return applyFill(cell, row, col, selectedColor)
-            }
-
+        val cell = _playerGrid[row][col]
+        return cell.color != null || when (mode) {
+            InputMode.FILL -> applyFill(cell, row, col, selectedColor)
             InputMode.NOTE -> {
-                toggleNote(cell, selectedColor)
-                return true
+                toggleNote(cell, row, col, selectedColor)
+                true
             }
         }
     }
@@ -52,48 +39,50 @@ class Board(private val block: Block) {
         col: Int,
         selectedColor: Int
     ): Boolean {
-
         val correctColor = block.matrix[row][col]
 
         if (selectedColor == correctColor) {
-
             if (cell.color == null) {
                 remainingCells--
             }
-
-            cell.color = selectedColor
-            cell.notes.clear()
-
+            updateCell(row, col, cell.copy(color = selectedColor, notes = emptySet()))
             return true
         }
 
         return false
     }
 
-    private fun toggleNote(cell: PlayerCell, color: Int) {
-
-        if (cell.notes.contains(color)) {
-            cell.notes.remove(color)
+    private fun toggleNote(cell: PlayerCell, row: Int, col: Int, color: Int) {
+        val newNotes = if (cell.notes.contains(color)) {
+            cell.notes - color
         } else {
-            cell.notes.add(color)
+            cell.notes + color
+        }
+        updateCell(row, col, cell.copy(notes = newNotes))
+    }
+
+    private fun updateCell(row: Int, col: Int, newCell: PlayerCell) {
+        _playerGrid = _playerGrid.mapIndexed { r, rowList ->
+            if (r == row) {
+                rowList.mapIndexed { c, oldCell ->
+                    if (c == col) newCell else oldCell
+                }
+            } else {
+                rowList
+            }
         }
     }
 
-    fun isSolved(): Boolean {
-        return remainingCells == 0
-    }
-
-    fun getPlayerGrid(): Array<Array<PlayerCell>> = playerGrid.value
+    fun isSolved(): Boolean = remainingCells == 0
 
     fun getRowHints(row: List<Int>): List<Hint> {
+        if (row.isEmpty()) return emptyList()
 
         val hints = mutableListOf<Hint>()
-
         var count = 1
         var currentColor = row[0]
 
         for (i in 1 until row.size) {
-
             if (row[i] == currentColor) {
                 count++
             } else {
@@ -102,21 +91,15 @@ class Board(private val block: Block) {
                 count = 1
             }
         }
-
         hints.add(Hint(count, currentColor))
 
         return hints.sortedWith(compareBy(Hint::length, Hint::color))
     }
 
     fun getColumnHints(col: Int): List<Hint> {
-
         val column: List<Int> = List(block.matrix.size) { y ->
             block.matrix[y][col]
         }
-
         return getRowHints(column)
     }
-
-
-
 }
