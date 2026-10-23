@@ -9,6 +9,7 @@ import com.example.nonogram.data.storage.Block
 import com.example.nonogram.data.storage.ImageLoader
 import com.example.nonogram.data.storage.PuzzleData
 import com.example.nonogram.data.storage.PuzzleItem
+import com.example.nonogram.data.storage.PuzzleProgress
 import com.example.nonogram.data.storage.StorageManager
 import com.example.nonogram.domain.repository.PuzzleRepository
 import kotlinx.coroutines.Dispatchers
@@ -24,16 +25,24 @@ class PuzzleRepositoryImpl(
         storageManager.loadMeta()
     }
 
-    override suspend fun getPuzzle(id: String): PuzzleItem? = withContext(Dispatchers.IO) {
+    override suspend fun getPuzzleItem(id: String): PuzzleItem? = withContext(Dispatchers.IO) {
         storageManager.loadMeta().firstOrNull { it.id == id }
+    }
+
+    override suspend fun getPuzzleData(id: String): PuzzleData? = withContext(Dispatchers.IO) {
+        storageManager.loadPuzzleData(id)
     }
 
     override suspend fun getBlock(id: String, index: Int): Block? = withContext(Dispatchers.IO) {
         storageManager.loadBlock(id, index)
     }
 
-    override suspend fun updateProgress(id: String, newBlock: Int): Unit = withContext(Dispatchers.IO) {
-        storageManager.updateProgress(id, newBlock)
+    override suspend fun saveProgress(id: String, progress: PuzzleProgress): Unit = withContext(Dispatchers.IO) {
+        storageManager.saveProgress(id, progress)
+    }
+
+    override suspend fun loadProgress(id: String): PuzzleProgress? = withContext(Dispatchers.IO) {
+        storageManager.loadProgress(id)
     }
 
     override suspend fun getResultImageFile(id: String): File = withContext(Dispatchers.IO) {
@@ -50,6 +59,14 @@ class PuzzleRepositoryImpl(
         runCatching {
             storageManager.exportPuzzle(id, outputUri, context)
         }
+    }
+
+    override suspend fun updateBlockProgressAndGenerateImage(
+        id: String,
+        completedBlockIndex: Int
+    ): Unit = withContext(Dispatchers.IO) {
+        val data = storageManager.loadPuzzleData(id) ?: return@withContext
+        storageManager.generateAndSaveProgressImage(id, data, completedBlockIndex)
     }
 
     override suspend fun createPuzzleFromImage(uri: Uri): Result<Unit> = withContext(Dispatchers.Default) {
@@ -71,21 +88,11 @@ class PuzzleRepositoryImpl(
             )
 
             val id = "puzzle_${System.currentTimeMillis()}"
-            val resultBitmap = ImageConverterQuantization.quantizedToBitmap(quantized)
 
             withContext(Dispatchers.IO) {
                 storageManager.savePuzzleData(id, puzzleData)
-                storageManager.saveResultImage(id, resultBitmap)
-
-                val meta = storageManager.loadMeta().toMutableList()
-                meta.add(
-                    PuzzleItem(
-                        id = id,
-                        currentBlock = 0,
-                        totalBlocks = blocks.size
-                    )
-                )
-                storageManager.saveMeta(meta)
+                storageManager.saveProgress(id, PuzzleProgress(puzzleId = id))
+                storageManager.generateAndSaveProgressImage(id, puzzleData, 0)
             }
         }
     }

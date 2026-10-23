@@ -2,11 +2,11 @@ package com.example.nonogram.domain.entity
 
 import com.example.nonogram.data.storage.Block
 
-class Game(val block: Block) {
+class Game(val block: Block, initialLives: Int = 5) {
 
     val board: Board = Board(block)
 
-    var lives: Int = 3
+    var lives: Int = initialLives
         private set
 
     var isVictory: Boolean = false

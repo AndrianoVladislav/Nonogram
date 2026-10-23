@@ -2,6 +2,7 @@ package com.example.nonogram.data.storage
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Color as AndroidColor
 import android.net.Uri
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -12,10 +13,14 @@ import java.io.FileOutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
+import kotlin.math.sqrt
 
-class StorageManager(context: Context) {
+class StorageManager(private val context: Context) {
 
-    private val json = Json { prettyPrint = true }
+    private val json = Json {
+        prettyPrint = true
+        ignoreUnknownKeys = true
+    }
 
     private val rootDir = File(context.filesDir, "puzzles")
 
@@ -23,42 +28,24 @@ class StorageManager(context: Context) {
         if (!rootDir.exists()) rootDir.mkdirs()
     }
 
-    private val metaFile = File(rootDir, "meta.json")
-
-    fun loadMeta(): List<PuzzleItem> {
-
-        if (!metaFile.exists()) return emptyList()
-
-        return try {
-            val text = metaFile.readText()
-            json.decodeFromString(text)
-        } catch (e: Exception) {
-            emptyList()
-        }
-    }
-
-    fun saveMeta(puzzles: List<PuzzleItem>) {
-
-        val text = json.encodeToString(puzzles)
-        metaFile.writeText(text)
-    }
-
     private fun getPuzzleDir(id: String): File {
-        return File(rootDir, id).apply { mkdirs() }
+        return File(rootDir, id).apply { if (!exists()) mkdirs() }
     }
+
+    // --- PUZZLE DATA (puzzle.json) ---
 
     fun savePuzzleData(id: String, data: PuzzleData) {
-
-        val dir = getPuzzleDir(id)
-        val file = File(dir, "blocks.json")
-
+        val file = File(getPuzzleDir(id), "puzzle.json")
         val text = json.encodeToString(data)
         file.writeText(text)
     }
 
     fun loadPuzzleData(id: String): PuzzleData? {
-
-        val file = File(getPuzzleDir(id), "blocks.json")
+        val dir = getPuzzleDir(id)
+        var file = File(dir, "puzzle.json")
+        if (!file.exists()) {
+            file = File(dir, "blocks.json")
+        }
         if (!file.exists()) return null
 
         return try {
@@ -69,182 +56,150 @@ class StorageManager(context: Context) {
     }
 
     fun loadBlock(id: String, index: Int): Block? {
-
         val data = loadPuzzleData(id) ?: return null
-
         return data.blocks.getOrNull(index)
     }
 
-    fun updateProgress(id: String, newBlock: Int) {
+    // --- REALTIME PROGRESS (progress.json) ---
 
-        val puzzles = loadMeta().toMutableList()
-
-        val index = puzzles.indexOfFirst { it.id == id }
-        if (index == -1) return
-
-        val puzzle = puzzles[index]
-        puzzles[index] = puzzle.copy(currentBlock = newBlock)
-
-        saveMeta(puzzles)
+    fun saveProgress(id: String, progress: PuzzleProgress) {
+        val file = File(getPuzzleDir(id), "progress.json")
+        val text = json.encodeToString(progress)
+        file.writeText(text)
     }
 
-    fun isCompleted(puzzle: PuzzleItem): Boolean {
-        return puzzle.currentBlock >= puzzle.totalBlocks
+    fun loadProgress(id: String): PuzzleProgress? {
+        val file = File(getPuzzleDir(id), "progress.json")
+        if (!file.exists()) return null
+
+        return try {
+            json.decodeFromString(file.readText())
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    // --- META SCANNING ---
+
+    fun loadMeta(): List<PuzzleItem> {
+        val dirs = rootDir.listFiles()?.filter { it.isDirectory } ?: return emptyList()
+        val result = mutableListOf<PuzzleItem>()
+
+        for (dir in dirs) {
+            val id = dir.name
+            val puzzleData = loadPuzzleData(id) ?: continue
+            val progress = loadProgress(id)
+
+            val currentBlock = progress?.currentBlockIndex ?: 0
+            val totalBlocks = puzzleData.blocks.size
+            val isCompleted = currentBlock >= totalBlocks
+
+            result.add(
+                PuzzleItem(
+                    id = id,
+                    currentBlock = currentBlock,
+                    totalBlocks = totalBlocks,
+                    isCompleted = isCompleted
+                )
+            )
+        }
+
+        return result.sortedByDescending { it.id }
     }
 
     fun getResultImage(id: String): File {
         return File(getPuzzleDir(id), "result.png")
     }
 
-    fun addPuzzle(puzzle: PuzzleItem) {
+    // --- PROGRESSIVE PNG GENERATION ---
 
-        val list = loadMeta().toMutableList()
+    fun generateAndSaveProgressImage(id: String, puzzleData: PuzzleData, currentBlockIndex: Int) {
+        if (puzzleData.blocks.isEmpty()) return
 
-        list.add(puzzle)
+        val totalBlocks = puzzleData.blocks.size
+        val blocksPerSide = sqrt(totalBlocks.toDouble()).toInt().coerceAtLeast(1)
+        val blockSize = puzzleData.blocks[0].matrix.size
 
-        saveMeta(list)
-    }
+        val imageWidth = blocksPerSide * blockSize
+        val imageHeight = ((totalBlocks + blocksPerSide - 1) / blocksPerSide) * blockSize
 
-    fun saveResultImage(id: String, bitmap: Bitmap) {
+        val bitmap = Bitmap.createBitmap(imageWidth, imageHeight, Bitmap.Config.ARGB_8888)
 
-        val file = File(getPuzzleDir(id), "result.png")
+        for (bIndex in 0 until totalBlocks) {
+            val block = puzzleData.blocks[bIndex]
+            val by = bIndex / blocksPerSide
+            val bx = bIndex % blocksPerSide
 
+            val isBlockSolved = bIndex < currentBlockIndex || currentBlockIndex >= totalBlocks
+
+            for (y in 0 until blockSize) {
+                for (x in 0 until blockSize) {
+                    val globalX = bx * blockSize + x
+                    val globalY = by * blockSize + y
+
+                    val color = if (isBlockSolved) {
+                        val colorIdx = block.matrix[y][x]
+                        block.usedColors.getOrElse(colorIdx) { AndroidColor.WHITE }
+                    } else {
+                        AndroidColor.LTGRAY
+                    }
+
+                    bitmap.setPixel(globalX, globalY, color)
+                }
+            }
+        }
+
+        val file = getResultImage(id)
         FileOutputStream(file).use { out ->
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
         }
     }
 
+    // --- EXPORT & IMPORT ---
+
     fun exportPuzzle(id: String, outputUri: Uri, context: Context) {
-
-        val puzzleDir = getPuzzleDir(id)
-
-        val original = loadPuzzleData(id)!!
-
-        val rleBlocks = original.blocks.map { block ->
-            block.matrix.map { row ->
-                encodeRLE(row).map { RLE(it.color, it.count) }
-            }
-        }
-
-        val compressedBlocks = RLEBlocks(rleBlocks, original.palette)
-
-        val json = Json.encodeToString(compressedBlocks)
+        val puzzleData = loadPuzzleData(id) ?: throw IllegalArgumentException("Puzzle $id not found")
+        val jsonText = json.encodeToString(puzzleData)
 
         val resolver = context.contentResolver
-
         resolver.openOutputStream(outputUri)?.use { outputStream ->
             ZipOutputStream(BufferedOutputStream(outputStream)).use { zip ->
-
-                // 🔹 blocks.json
-                zip.putNextEntry(ZipEntry("blocks.json"))
-                zip.write(json.toByteArray())
+                zip.putNextEntry(ZipEntry("puzzle.json"))
+                zip.write(jsonText.toByteArray())
                 zip.closeEntry()
-
-                // 🔹 result.png
-                val resultFile = File(puzzleDir, "result.png")
-                if (resultFile.exists()) {
-                    zip.putNextEntry(ZipEntry("result.png"))
-                    zip.write(resultFile.readBytes())
-                    zip.closeEntry()
-                }
             }
         }
     }
 
     fun importPuzzle(uri: Uri, context: Context) {
-
         val resolver = context.contentResolver
-
         val newId = "puzzle_${System.currentTimeMillis()}"
-        val puzzleDir = getPuzzleDir(newId)
+
+        var puzzleJsonText: String? = null
 
         resolver.openInputStream(uri)?.use { inputStream ->
             ZipInputStream(BufferedInputStream(inputStream)).use { zip ->
-
                 var entry: ZipEntry?
-
                 while (zip.nextEntry.also { entry = it } != null) {
-
-                    val file = File(puzzleDir, entry!!.name)
-
-                    FileOutputStream(file).use { out ->
-                        zip.copyTo(out)
+                    val currentEntry = entry ?: continue
+                    if (currentEntry.name == "puzzle.json" || currentEntry.name == "blocks.json") {
+                        puzzleJsonText = zip.readBytes().decodeToString()
                     }
-
                     zip.closeEntry()
-
-                    if (!entry.name.endsWith(".json") && !entry.name.endsWith(".png")) return
                 }
             }
         }
 
-        // blocks.json
-        val compressedData: RLEBlocks =
-            Json.decodeFromString(File(puzzleDir, "blocks.json").readText())
-
-        // RLE
-        val blocks: List<Block> = compressedData.blocks.map { block ->
-            Block(
-                matrix = block.map {
-                    decodeRLE(it)
-                },
-                usedColors = compressedData.palette
-            )
+        if (puzzleJsonText == null) {
+            puzzleJsonText = resolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
         }
 
-        val decompressedBlocks = PuzzleData(
-            palette = compressedData.palette,
-            blocks = blocks
-        )
-
-        savePuzzleData(newId, decompressedBlocks)
-        val meta = loadMeta().toMutableList()
-
-        meta.add(
-            PuzzleItem(
-                id = newId,
-                currentBlock = 0,
-                totalBlocks = decompressedBlocks.blocks.size
-            )
-        )
-
-        saveMeta(meta)
-    }
-
-    fun encodeRLE(row: List<Int>): List<RLE> {
-
-        if (row.isEmpty()) return emptyList()
-
-        val result = mutableListOf<RLE>()
-
-        var current = row[0]
-        var count = 1
-
-        for (i in 1 until row.size) {
-            if (row[i] == current) {
-                count++
-            } else {
-                result.add(RLE(current, count))
-                current = row[i]
-                count = 1
-            }
+        val jsonContent = puzzleJsonText
+        if (jsonContent != null) {
+            val puzzleData: PuzzleData = json.decodeFromString(jsonContent)
+            savePuzzleData(newId, puzzleData)
+            saveProgress(newId, PuzzleProgress(puzzleId = newId))
+            generateAndSaveProgressImage(newId, puzzleData, 0)
         }
-
-        result.add(RLE(current, count))
-
-        return result
-    }
-
-    fun decodeRLE(data: List<RLE>): List<Int> {
-
-        val result = mutableListOf<Int>()
-
-        for ((value, count) in data) {
-            repeat(count) {
-                result.add(value)
-            }
-        }
-
-        return result
     }
 }

@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class PuzzleItem(
     val id: String,
-    var currentBlock: Int,
-    val totalBlocks: Int
+    val currentBlock: Int = 0,
+    val totalBlocks: Int = 1,
+    val isCompleted: Boolean = false
 )

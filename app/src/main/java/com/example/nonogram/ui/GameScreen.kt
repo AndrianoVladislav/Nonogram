@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -88,6 +89,9 @@ fun GameScreen(
         return
     }
 
+    val isDark = uiState.isDarkTheme
+    val backgroundColor = if (isDark) Color.Black else Color.White
+
     val grid = uiState.grid
     val gridSize = grid.size
     val palette = uiState.palette
@@ -106,8 +110,9 @@ fun GameScreen(
 
     Column(
         modifier = Modifier
-            .padding(10.dp, 10.dp, 0.dp, 10.dp)
             .fillMaxSize()
+            .background(backgroundColor)
+            .padding(10.dp, 10.dp, 0.dp, 10.dp)
     ) {
 
         Row(
@@ -123,19 +128,31 @@ fun GameScreen(
         TopColumnHints(
             colHints = uiState.colHints,
             palette = palette,
+            hintTextColors = uiState.hintTextColors,
             cellSize = cellSize,
             maxHints = maxHints,
             leftHintsWidth = leftHintsWidth,
-            fieldWidth = fieldWidth
+            fieldWidth = fieldWidth,
+            crossedColHints = uiState.crossedColHints,
+            onColHintClick = { col, hintIndex ->
+                soundManager.playSwitch()
+                viewModel.toggleCrossColHint(col, hintIndex)
+            }
         )
 
         Row {
             LeftRowHints(
                 rowHints = uiState.rowHints,
                 palette = palette,
+                hintTextColors = uiState.hintTextColors,
                 cellSize = cellSize,
                 leftHintsWidth = leftHintsWidth,
-                fieldWidth = fieldWidth
+                fieldWidth = fieldWidth,
+                crossedRowHints = uiState.crossedRowHints,
+                onRowHintClick = { row, hintIndex ->
+                    soundManager.playSwitch()
+                    viewModel.toggleCrossRowHint(row, hintIndex)
+                }
             )
 
             BoardGridCanvas(
@@ -147,6 +164,7 @@ fun GameScreen(
                 selectedColor = uiState.selectedColor,
                 fillMode = uiState.fillMode,
                 isGameOver = uiState.isGameOver,
+                isDarkTheme = isDark,
                 cellScales = cellScales,
                 soundManager = soundManager,
                 onMove = { r, c ->
@@ -161,6 +179,7 @@ fun GameScreen(
             palette = palette,
             selectedColor = uiState.selectedColor,
             fillMode = uiState.fillMode,
+            isDarkTheme = isDark,
             onColorSelected = { index ->
                 soundManager.playSwitch()
                 viewModel.setSelectedColor(index)
@@ -168,6 +187,10 @@ fun GameScreen(
             onFillModeToggled = { fill ->
                 soundManager.playSwitch()
                 viewModel.setFillMode(fill)
+            },
+            onThemeToggled = { dark ->
+                soundManager.playSwitch()
+                viewModel.setDarkTheme(dark)
             }
         )
     }
@@ -211,15 +234,7 @@ fun GameScreen(
                     cellScales.clear()
                     viewModel.restartGame()
                 }) {
-                    Text("Znovu")
-                }
-            },
-            dismissButton = {
-                Button(onClick = {
-                    soundManager.playSwitch()
-                    onExit()
-                }) {
-                    Text("Zpět")
+                    Text("Pokračovat")
                 }
             }
         )
@@ -230,16 +245,33 @@ fun GameScreen(
 private fun TopColumnHints(
     colHints: List<List<Hint>>,
     palette: List<Int>,
+    hintTextColors: List<Int>,
     cellSize: Dp,
     maxHints: Int,
     leftHintsWidth: Dp,
-    fieldWidth: Dp
+    fieldWidth: Dp,
+    crossedColHints: Set<Pair<Int, Int>>,
+    onColHintClick: (col: Int, hintIndex: Int) -> Unit
 ) {
     Canvas(
         modifier = Modifier
             .padding(start = leftHintsWidth)
             .width(fieldWidth)
             .height(cellSize * maxHints)
+            .pointerInput(colHints, crossedColHints) {
+                detectTapGestures { offset ->
+                    val px = cellSize.toPx()
+                    val col = (offset.x / px).toInt().coerceIn(0, colHints.size - 1)
+                    val hints = colHints.getOrNull(col) ?: return@detectTapGestures
+                    val startY = (maxHints - hints.size) * px
+                    if (offset.y >= startY) {
+                        val hintIndex = ((offset.y - startY) / px).toInt()
+                        if (hintIndex in hints.indices) {
+                            onColHintClick(col, hintIndex)
+                        }
+                    }
+                }
+            }
     ) {
         val px = cellSize.toPx()
 
@@ -249,24 +281,44 @@ private fun TopColumnHints(
             hints.forEachIndexed { i, hint ->
                 val x = col * px
                 val y = startY + i * px
+                val isCrossed = crossedColHints.contains(col to i)
+
+                val baseColorInt = palette[hint.color]
+                val baseColor = Color(baseColorInt)
+                val circleColor = if (isCrossed) baseColor.copy(alpha = 0.35f) else baseColor
 
                 drawCircle(
-                    color = Color(palette[hint.color]),
+                    color = circleColor,
                     radius = px / 2,
                     center = Offset(x + px / 2, y + px / 2)
                 )
+
+                val textColor = if (isCrossed) {
+                    android.graphics.Color.GRAY
+                } else {
+                    hintTextColors.getOrElse(hint.color) { android.graphics.Color.WHITE }
+                }
 
                 drawContext.canvas.nativeCanvas.drawText(
                     hint.length.toString(),
                     x + px / 2,
                     y + 5 + px / 2,
                     android.graphics.Paint().apply {
-                        color = android.graphics.Color.WHITE
+                        color = textColor
                         textAlign = android.graphics.Paint.Align.CENTER
                         textSize = px / 2
                         isFakeBoldText = true
                     }
                 )
+
+                if (isCrossed) {
+                    drawLine(
+                        color = Color.Red,
+                        start = Offset(x + px * 0.15f, y + px * 0.85f),
+                        end = Offset(x + px * 0.85f, y + px * 0.15f),
+                        strokeWidth = 4f
+                    )
+                }
             }
         }
     }
@@ -276,9 +328,12 @@ private fun TopColumnHints(
 private fun LeftRowHints(
     rowHints: List<List<Hint>>,
     palette: List<Int>,
+    hintTextColors: List<Int>,
     cellSize: Dp,
     leftHintsWidth: Dp,
-    fieldWidth: Dp
+    fieldWidth: Dp,
+    crossedRowHints: Set<Pair<Int, Int>>,
+    onRowHintClick: (row: Int, hintIndex: Int) -> Unit
 ) {
     val scrollState = rememberScrollState()
 
@@ -296,6 +351,20 @@ private fun LeftRowHints(
             modifier = Modifier
                 .width(cellSize * rowHints.size)
                 .height(fieldWidth)
+                .pointerInput(rowHints, crossedRowHints) {
+                    detectTapGestures { offset ->
+                        val px = cellSize.toPx()
+                        val row = (offset.y / px).toInt().coerceIn(0, rowHints.size - 1)
+                        val hints = rowHints.getOrNull(row) ?: return@detectTapGestures
+                        val startX = (rowHints.size - hints.size) * px
+                        if (offset.x >= startX) {
+                            val hintIndex = ((offset.x - startX) / px).toInt()
+                            if (hintIndex in hints.indices) {
+                                onRowHintClick(row, hintIndex)
+                            }
+                        }
+                    }
+                }
         ) {
             val px = cellSize.toPx()
 
@@ -305,24 +374,44 @@ private fun LeftRowHints(
                 hints.forEachIndexed { i, hint ->
                     val x = startX + i * px
                     val y = row * px
+                    val isCrossed = crossedRowHints.contains(row to i)
+
+                    val baseColorInt = palette[hint.color]
+                    val baseColor = Color(baseColorInt)
+                    val circleColor = if (isCrossed) baseColor.copy(alpha = 0.35f) else baseColor
 
                     drawCircle(
-                        color = Color(palette[hint.color]),
+                        color = circleColor,
                         radius = px / 2,
                         center = Offset(x + px / 2, y + px / 2)
                     )
+
+                    val textColor = if (isCrossed) {
+                        android.graphics.Color.GRAY
+                    } else {
+                        hintTextColors.getOrElse(hint.color) { android.graphics.Color.WHITE }
+                    }
 
                     drawContext.canvas.nativeCanvas.drawText(
                         hint.length.toString(),
                         x + px / 2,
                         y + 5 + px / 2,
                         android.graphics.Paint().apply {
-                            color = android.graphics.Color.WHITE
+                            color = textColor
                             textAlign = android.graphics.Paint.Align.CENTER
                             textSize = px / 2
                             isFakeBoldText = true
                         }
                     )
+
+                    if (isCrossed) {
+                        drawLine(
+                            color = Color.Red,
+                            start = Offset(x + px * 0.15f, y + px * 0.85f),
+                            end = Offset(x + px * 0.85f, y + px * 0.15f),
+                            strokeWidth = 4f
+                        )
+                    }
                 }
             }
         }
@@ -339,11 +428,13 @@ private fun BoardGridCanvas(
     selectedColor: Int,
     fillMode: Boolean,
     isGameOver: Boolean,
+    isDarkTheme: Boolean,
     cellScales: MutableMap<Int, Animatable<Float, AnimationVector1D>>,
     soundManager: SoundManager,
     onMove: (row: Int, col: Int) -> Boolean
 ) {
     val coroutineScope = rememberCoroutineScope()
+    val gridLineColor = if (isDarkTheme) Color.LightGray else Color.Black
 
     Canvas(
         modifier = Modifier
@@ -502,7 +593,7 @@ private fun BoardGridCanvas(
         for (i in 0..gridSize) {
             val stroke = if (i % 5 == 0) 5f else 2f
             drawLine(
-                color = Color.Black,
+                color = gridLineColor,
                 start = Offset(i * px, 0f),
                 end = Offset(i * px, gridSize * px),
                 strokeWidth = stroke
@@ -512,7 +603,7 @@ private fun BoardGridCanvas(
         for (i in 0..gridSize) {
             val stroke = if (i % 5 == 0) 5f else 2f
             drawLine(
-                color = Color.Black,
+                color = gridLineColor,
                 start = Offset(0f, i * px),
                 end = Offset(gridSize * px, i * px),
                 strokeWidth = stroke
@@ -526,9 +617,14 @@ private fun BottomControls(
     palette: List<Int>,
     selectedColor: Int,
     fillMode: Boolean,
+    isDarkTheme: Boolean,
     onColorSelected: (Int) -> Unit,
-    onFillModeToggled: (Boolean) -> Unit
+    onFillModeToggled: (Boolean) -> Unit,
+    onThemeToggled: (Boolean) -> Unit
 ) {
+    val activeTextColor = if (isDarkTheme) Color.White else Color.Black
+    val borderColor = if (isDarkTheme) Color.White else Color.Black
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -543,21 +639,37 @@ private fun BottomControls(
                         .background(Color(color))
                         .border(
                             width = if (selectedColor == index) 3.dp else 1.dp,
-                            color = if (selectedColor == index) Color.Black else Color.Gray
+                            color = if (selectedColor == index) borderColor else Color.Gray
                         )
                         .clickable { onColorSelected(index) }
                 )
             }
         }
 
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("FILL", fontSize = 10.sp, color = if (fillMode) Color.Black else Color.Gray)
-            Switch(
-                checked = !fillMode,
-                onCheckedChange = { onFillModeToggled(!it) },
-                modifier = Modifier.rotate(90f).padding(vertical = 8.dp)
-            )
-            Text("NOTE", fontSize = 10.sp, color = if (!fillMode) Color.Black else Color.Gray)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            // Theme Switch (Black/White BG)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("DARK", fontSize = 10.sp, color = if (isDarkTheme) Color.White else Color.Gray)
+                Switch(
+                    checked = isDarkTheme,
+                    onCheckedChange = { onThemeToggled(it) },
+                    modifier = Modifier.scale(0.75f)
+                )
+            }
+
+            // Fill / Note Switch
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("FILL", fontSize = 10.sp, color = if (fillMode) activeTextColor else Color.Gray)
+                Switch(
+                    checked = !fillMode,
+                    onCheckedChange = { onFillModeToggled(!it) },
+                    modifier = Modifier.rotate(90f).padding(vertical = 4.dp)
+                )
+                Text("NOTE", fontSize = 10.sp, color = if (!fillMode) activeTextColor else Color.Gray)
+            }
         }
     }
 }
@@ -565,7 +677,7 @@ private fun BottomControls(
 @Composable
 fun HeartIcon(filled: Boolean, soundManager: SoundManager?) {
     var previousFilled by remember { mutableStateOf(filled) }
-    val scale = remember { Animatable(1f) }
+    val scale = remember { Animatable(if (filled) 1f else 0f) }
 
     LaunchedEffect(filled) {
         if (previousFilled && !filled) {
@@ -593,7 +705,7 @@ fun LivesDisplay(lives: Int, soundManager: SoundManager?) {
         modifier = Modifier.padding(8.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        repeat(3) { i ->
+        repeat(5) { i ->
             HeartIcon(filled = i < lives, soundManager = soundManager)
         }
     }
