@@ -18,6 +18,7 @@ data class HintPair(val index1: Int, val index2: Int)
 @Serializable
 data class PuzzleProgress(
     val puzzleId: String,
+    val title: String? = null,
     val currentBlockIndex: Int = 0,
     val lives: Int = 5,
     val currentBlockGrid: List<List<SavedPlayerCell>> = emptyList(),

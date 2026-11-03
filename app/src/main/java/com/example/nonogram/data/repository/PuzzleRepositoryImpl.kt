@@ -45,6 +45,10 @@ class PuzzleRepositoryImpl(
         storageManager.loadProgress(id)
     }
 
+    override suspend fun renamePuzzle(id: String, newTitle: String): Unit = withContext(Dispatchers.IO) {
+        storageManager.renamePuzzle(id, newTitle)
+    }
+
     override suspend fun getResultImageFile(id: String): File = withContext(Dispatchers.IO) {
         storageManager.getResultImage(id)
     }
@@ -69,14 +73,27 @@ class PuzzleRepositoryImpl(
         storageManager.generateAndSaveProgressImage(id, data, completedBlockIndex)
     }
 
-    override suspend fun createPuzzleFromImage(uri: Uri): Result<Unit> = withContext(Dispatchers.Default) {
+    override suspend fun createPuzzleFromImage(
+        uri: Uri,
+        blockSizeX: Int,
+        blockSizeY: Int
+    ): Result<Unit> = withContext(Dispatchers.Default) {
         runCatching {
             val bitmap = ImageLoader.loadBitmapFromUri(context, uri)
                 ?: throw IllegalArgumentException("Failed to load image bitmap from Uri")
 
-            val resized = ImageConverterResize.resizeToBlocks(bitmap)
+            val resized = ImageConverterResize.resizeToBlocks(
+                source = bitmap,
+                maxBlocks = 20,
+                blockSizeX = blockSizeX,
+                blockSizeY = blockSizeY
+            )
             val quantized = ImageConverterQuantization.quantizeKMeans(resized)
-            val blocks = ImageConverterBlock.splitToBlocks(quantized)
+            val blocks = ImageConverterBlock.splitToBlocks(
+                quantizationResult = quantized,
+                blockSizeX = blockSizeX,
+                blockSizeY = blockSizeY
+            )
 
             if (blocks.isEmpty()) {
                 throw IllegalStateException("No puzzle blocks created from image")

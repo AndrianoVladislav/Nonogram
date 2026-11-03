@@ -41,6 +41,13 @@ class CollectionViewModel(
         _uiState.update { it.copy(selectedPuzzle = puzzle) }
     }
 
+    fun renamePuzzle(puzzleId: String, newTitle: String) {
+        viewModelScope.launch {
+            repository.renamePuzzle(puzzleId, newTitle)
+            loadPuzzles()
+        }
+    }
+
     suspend fun getResultImageFile(puzzleId: String): File {
         return repository.getResultImageFile(puzzleId)
     }

@@ -13,6 +13,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.AlertDialog
@@ -50,8 +52,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -93,26 +95,17 @@ fun GameScreen(
     val backgroundColor = if (isDark) Color.Black else Color.White
 
     val grid = uiState.grid
-    val gridSize = grid.size
+    val gridHeight = grid.size
+    val gridWidth = if (gridHeight > 0) grid[0].size else 0
     val palette = uiState.palette
 
     val cellScales = remember { mutableStateMapOf<Int, Animatable<Float, AnimationVector1D>>() }
-
-    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
-    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-
-    val topSpacer = screenHeight * 0.02f
-    val leftHintsWidth = screenWidth * 0.15f
-    val fieldWidth = screenWidth * 0.80f
-
-    val cellSize = fieldWidth / gridSize
-    val maxHints = 20
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(backgroundColor)
-            .padding(10.dp, 10.dp, 0.dp, 10.dp)
+            .padding(8.dp)
     ) {
 
         Row(
@@ -123,57 +116,100 @@ fun GameScreen(
             LivesDisplay(lives = uiState.lives, soundManager = soundManager)
         }
 
-        Spacer(modifier = Modifier.height(topSpacer))
+        Spacer(modifier = Modifier.height(4.dp))
 
-        TopColumnHints(
-            colHints = uiState.colHints,
-            palette = palette,
-            hintTextColors = uiState.hintTextColors,
-            cellSize = cellSize,
-            maxHints = maxHints,
-            leftHintsWidth = leftHintsWidth,
-            fieldWidth = fieldWidth,
-            crossedColHints = uiState.crossedColHints,
-            onColHintClick = { col, hintIndex ->
-                soundManager.playSwitch()
-                viewModel.toggleCrossColHint(col, hintIndex)
+        // 100% Weight Play Area
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
+            val totalAreaWidth = this.maxWidth
+            val totalAreaHeight = this.maxHeight
+
+            val leftHintsWidth = totalAreaWidth * 0.25f
+            val topHintsHeight = totalAreaHeight * 0.30f
+
+            val availableBoardWidth = totalAreaWidth * 0.75f
+            val availableBoardHeight = totalAreaHeight * 0.70f
+
+            val density = LocalDensity.current
+            val boardWidthPx = with(density) { availableBoardWidth.toPx() }
+            val boardHeightPx = with(density) { availableBoardHeight.toPx() }
+
+            val cellPxFromWidth = if (gridWidth > 0) boardWidthPx / gridWidth else boardWidthPx
+            val cellPxFromHeight = if (gridHeight > 0) boardHeightPx / gridHeight else boardHeightPx
+            val cellPx = minOf(cellPxFromWidth, cellPxFromHeight)
+
+            val actualBoardWidthDp = with(density) { (cellPx * gridWidth).toDp() }
+            val actualBoardHeightDp = with(density) { (cellPx * gridHeight).toDp() }
+
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Top Row: Top Column Hints
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(topHintsHeight)
+                ) {
+                    Spacer(modifier = Modifier.width(leftHintsWidth))
+                    TopColumnHints(
+                        colHints = uiState.colHints,
+                        palette = palette,
+                        hintTextColors = uiState.hintTextColors,
+                        cellPx = cellPx,
+                        widthDp = actualBoardWidthDp,
+                        heightDp = topHintsHeight,
+                        crossedColHints = uiState.crossedColHints,
+                        onColHintClick = { col, hintIndex ->
+                            soundManager.playSwitch()
+                            viewModel.toggleCrossColHint(col, hintIndex)
+                        }
+                    )
+                }
+
+                // Main Row: Left Row Hints + Board Canvas
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(actualBoardHeightDp)
+                ) {
+                    LeftRowHints(
+                        rowHints = uiState.rowHints,
+                        palette = palette,
+                        hintTextColors = uiState.hintTextColors,
+                        cellPx = cellPx,
+                        widthDp = leftHintsWidth,
+                        heightDp = actualBoardHeightDp,
+                        crossedRowHints = uiState.crossedRowHints,
+                        onRowHintClick = { row, hintIndex ->
+                            soundManager.playSwitch()
+                            viewModel.toggleCrossRowHint(row, hintIndex)
+                        }
+                    )
+
+                    BoardGridCanvas(
+                        grid = grid,
+                        gridWidth = gridWidth,
+                        gridHeight = gridHeight,
+                        palette = palette,
+                        cellPx = cellPx,
+                        boardWidthDp = actualBoardWidthDp,
+                        boardHeightDp = actualBoardHeightDp,
+                        selectedColor = uiState.selectedColor,
+                        fillMode = uiState.fillMode,
+                        isGameOver = uiState.isGameOver,
+                        isDarkTheme = isDark,
+                        cellScales = cellScales,
+                        soundManager = soundManager,
+                        onMove = { r, c ->
+                            viewModel.makeMove(r, c)
+                        }
+                    )
+                }
             }
-        )
-
-        Row {
-            LeftRowHints(
-                rowHints = uiState.rowHints,
-                palette = palette,
-                hintTextColors = uiState.hintTextColors,
-                cellSize = cellSize,
-                leftHintsWidth = leftHintsWidth,
-                fieldWidth = fieldWidth,
-                crossedRowHints = uiState.crossedRowHints,
-                onRowHintClick = { row, hintIndex ->
-                    soundManager.playSwitch()
-                    viewModel.toggleCrossRowHint(row, hintIndex)
-                }
-            )
-
-            BoardGridCanvas(
-                grid = grid,
-                gridSize = gridSize,
-                palette = palette,
-                cellSize = cellSize,
-                fieldWidth = fieldWidth,
-                selectedColor = uiState.selectedColor,
-                fillMode = uiState.fillMode,
-                isGameOver = uiState.isGameOver,
-                isDarkTheme = isDark,
-                cellScales = cellScales,
-                soundManager = soundManager,
-                onMove = { r, c ->
-                    viewModel.makeMove(r, c)
-                }
-            )
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(4.dp))
 
         BottomControls(
             palette = palette,
@@ -246,78 +282,94 @@ private fun TopColumnHints(
     colHints: List<List<Hint>>,
     palette: List<Int>,
     hintTextColors: List<Int>,
-    cellSize: Dp,
-    maxHints: Int,
-    leftHintsWidth: Dp,
-    fieldWidth: Dp,
+    cellPx: Float,
+    widthDp: Dp,
+    heightDp: Dp,
     crossedColHints: Set<Pair<Int, Int>>,
     onColHintClick: (col: Int, hintIndex: Int) -> Unit
 ) {
-    Canvas(
+    val scrollState = rememberScrollState()
+    val maxHintsCount = colHints.maxOfOrNull { it.size } ?: 1
+    val totalHintsContentHeightPx = maxHintsCount * cellPx
+    val density = LocalDensity.current
+    val totalHintsContentHeightDp = with(density) { totalHintsContentHeightPx.toDp() }
+    val containerHeightPx = with(density) { heightDp.toPx() }
+    val canvasHeightPx = maxOf(containerHeightPx, totalHintsContentHeightPx)
+
+    LaunchedEffect(Unit) {
+        scrollState.scrollTo(scrollState.maxValue)
+    }
+
+    Box(
         modifier = Modifier
-            .padding(start = leftHintsWidth)
-            .width(fieldWidth)
-            .height(cellSize * maxHints)
-            .pointerInput(colHints, crossedColHints) {
-                detectTapGestures { offset ->
-                    val px = cellSize.toPx()
-                    val col = (offset.x / px).toInt().coerceIn(0, colHints.size - 1)
-                    val hints = colHints.getOrNull(col) ?: return@detectTapGestures
-                    val startY = (maxHints - hints.size) * px
-                    if (offset.y >= startY) {
-                        val hintIndex = ((offset.y - startY) / px).toInt()
-                        if (hintIndex in hints.indices) {
-                            onColHintClick(col, hintIndex)
+            .width(widthDp)
+            .height(heightDp)
+            .verticalScroll(scrollState)
+    ) {
+        Canvas(
+            modifier = Modifier
+                .width(widthDp)
+                .height(maxOf(heightDp, totalHintsContentHeightDp))
+                .pointerInput(colHints, crossedColHints, cellPx, canvasHeightPx) {
+                    detectTapGestures { offset ->
+                        val col = (offset.x / cellPx).toInt().coerceIn(0, colHints.size - 1)
+                        val hints = colHints.getOrNull(col) ?: return@detectTapGestures
+                        val startY = canvasHeightPx - (hints.size * cellPx)
+                        if (offset.y >= startY) {
+                            val hintIndex = ((offset.y - startY) / cellPx).toInt()
+                            if (hintIndex in hints.indices) {
+                                onColHintClick(col, hintIndex)
+                            }
                         }
                     }
                 }
-            }
-    ) {
-        val px = cellSize.toPx()
+        ) {
+            val drawCanvasHeight = size.height
 
-        colHints.forEachIndexed { col, hints ->
-            val startY = (maxHints - hints.size) * px
+            colHints.forEachIndexed { col, hints ->
+                val startY = drawCanvasHeight - (hints.size * cellPx)
 
-            hints.forEachIndexed { i, hint ->
-                val x = col * px
-                val y = startY + i * px
-                val isCrossed = crossedColHints.contains(col to i)
+                hints.forEachIndexed { i, hint ->
+                    val x = col * cellPx
+                    val y = startY + i * cellPx
+                    val isCrossed = crossedColHints.contains(col to i)
 
-                val baseColorInt = palette[hint.color]
-                val baseColor = Color(baseColorInt)
-                val circleColor = if (isCrossed) baseColor.copy(alpha = 0.35f) else baseColor
+                    val baseColorInt = palette[hint.color]
+                    val baseColor = Color(baseColorInt)
+                    val circleColor = baseColor
 
-                drawCircle(
-                    color = circleColor,
-                    radius = px / 2,
-                    center = Offset(x + px / 2, y + px / 2)
-                )
-
-                val textColor = if (isCrossed) {
-                    android.graphics.Color.GRAY
-                } else {
-                    hintTextColors.getOrElse(hint.color) { android.graphics.Color.WHITE }
-                }
-
-                drawContext.canvas.nativeCanvas.drawText(
-                    hint.length.toString(),
-                    x + px / 2,
-                    y + 5 + px / 2,
-                    android.graphics.Paint().apply {
-                        color = textColor
-                        textAlign = android.graphics.Paint.Align.CENTER
-                        textSize = px / 2
-                        isFakeBoldText = true
-                    }
-                )
-
-                if (isCrossed) {
-                    drawLine(
-                        color = Color.Red,
-                        start = Offset(x + px * 0.15f, y + px * 0.85f),
-                        end = Offset(x + px * 0.85f, y + px * 0.15f),
-                        strokeWidth = 4f
+                    drawCircle(
+                        color = circleColor,
+                        radius = cellPx / 2,
+                        center = Offset(x + cellPx / 2, y + cellPx / 2)
                     )
+
+                    val textColor = if (isCrossed) {
+                        android.graphics.Color.GRAY
+                    } else {
+                        hintTextColors.getOrElse(hint.color) { android.graphics.Color.WHITE }
+                    }
+
+                    drawContext.canvas.nativeCanvas.drawText(
+                        hint.length.toString(),
+                        x + cellPx / 2,
+                        y + 5 + cellPx / 2,
+                        android.graphics.Paint().apply {
+                            color = textColor
+                            textAlign = android.graphics.Paint.Align.CENTER
+                            textSize = cellPx / 2
+                            isFakeBoldText = true
+                        }
+                    )
+
+                    if (isCrossed) {
+                        drawLine(
+                            color = Color.Red,
+                            start = Offset(x + cellPx * 0.15f, y + cellPx * 0.85f),
+                            end = Offset(x + cellPx * 0.85f, y + cellPx * 0.15f),
+                            strokeWidth = 4f
+                        )
+                    }
                 }
             }
         }
@@ -329,13 +381,19 @@ private fun LeftRowHints(
     rowHints: List<List<Hint>>,
     palette: List<Int>,
     hintTextColors: List<Int>,
-    cellSize: Dp,
-    leftHintsWidth: Dp,
-    fieldWidth: Dp,
+    cellPx: Float,
+    widthDp: Dp,
+    heightDp: Dp,
     crossedRowHints: Set<Pair<Int, Int>>,
     onRowHintClick: (row: Int, hintIndex: Int) -> Unit
 ) {
     val scrollState = rememberScrollState()
+    val maxHintsCount = rowHints.maxOfOrNull { it.size } ?: 1
+    val totalHintsContentWidthPx = maxHintsCount * cellPx
+    val density = LocalDensity.current
+    val totalHintsContentWidthDp = with(density) { totalHintsContentWidthPx.toDp() }
+    val containerWidthPx = with(density) { widthDp.toPx() }
+    val canvasWidthPx = maxOf(containerWidthPx, totalHintsContentWidthPx)
 
     LaunchedEffect(Unit) {
         scrollState.scrollTo(scrollState.maxValue)
@@ -343,22 +401,21 @@ private fun LeftRowHints(
 
     Box(
         modifier = Modifier
-            .width(leftHintsWidth)
-            .height(fieldWidth)
+            .width(widthDp)
+            .height(heightDp)
             .horizontalScroll(scrollState)
     ) {
         Canvas(
             modifier = Modifier
-                .width(cellSize * rowHints.size)
-                .height(fieldWidth)
-                .pointerInput(rowHints, crossedRowHints) {
+                .width(maxOf(widthDp, totalHintsContentWidthDp))
+                .height(heightDp)
+                .pointerInput(rowHints, crossedRowHints, cellPx, canvasWidthPx) {
                     detectTapGestures { offset ->
-                        val px = cellSize.toPx()
-                        val row = (offset.y / px).toInt().coerceIn(0, rowHints.size - 1)
+                        val row = (offset.y / cellPx).toInt().coerceIn(0, rowHints.size - 1)
                         val hints = rowHints.getOrNull(row) ?: return@detectTapGestures
-                        val startX = (rowHints.size - hints.size) * px
+                        val startX = canvasWidthPx - (hints.size * cellPx)
                         if (offset.x >= startX) {
-                            val hintIndex = ((offset.x - startX) / px).toInt()
+                            val hintIndex = ((offset.x - startX) / cellPx).toInt()
                             if (hintIndex in hints.indices) {
                                 onRowHintClick(row, hintIndex)
                             }
@@ -366,24 +423,24 @@ private fun LeftRowHints(
                     }
                 }
         ) {
-            val px = cellSize.toPx()
+            val drawCanvasWidth = size.width
 
             rowHints.forEachIndexed { row, hints ->
-                val startX = (rowHints.size - hints.size) * px
+                val startX = drawCanvasWidth - (hints.size * cellPx)
 
                 hints.forEachIndexed { i, hint ->
-                    val x = startX + i * px
-                    val y = row * px
+                    val x = startX + i * cellPx
+                    val y = row * cellPx
                     val isCrossed = crossedRowHints.contains(row to i)
 
                     val baseColorInt = palette[hint.color]
                     val baseColor = Color(baseColorInt)
-                    val circleColor = if (isCrossed) baseColor.copy(alpha = 0.35f) else baseColor
+                    val circleColor = baseColor
 
                     drawCircle(
                         color = circleColor,
-                        radius = px / 2,
-                        center = Offset(x + px / 2, y + px / 2)
+                        radius = cellPx / 2,
+                        center = Offset(x + cellPx / 2, y + cellPx / 2)
                     )
 
                     val textColor = if (isCrossed) {
@@ -394,12 +451,12 @@ private fun LeftRowHints(
 
                     drawContext.canvas.nativeCanvas.drawText(
                         hint.length.toString(),
-                        x + px / 2,
-                        y + 5 + px / 2,
+                        x + cellPx / 2,
+                        y + 5 + cellPx / 2,
                         android.graphics.Paint().apply {
                             color = textColor
                             textAlign = android.graphics.Paint.Align.CENTER
-                            textSize = px / 2
+                            textSize = cellPx / 2
                             isFakeBoldText = true
                         }
                     )
@@ -407,8 +464,8 @@ private fun LeftRowHints(
                     if (isCrossed) {
                         drawLine(
                             color = Color.Red,
-                            start = Offset(x + px * 0.15f, y + px * 0.85f),
-                            end = Offset(x + px * 0.85f, y + px * 0.15f),
+                            start = Offset(x + cellPx * 0.15f, y + cellPx * 0.85f),
+                            end = Offset(x + cellPx * 0.85f, y + cellPx * 0.15f),
                             strokeWidth = 4f
                         )
                     }
@@ -421,10 +478,12 @@ private fun LeftRowHints(
 @Composable
 private fun BoardGridCanvas(
     grid: List<List<PlayerCell>>,
-    gridSize: Int,
+    gridWidth: Int,
+    gridHeight: Int,
     palette: List<Int>,
-    cellSize: Dp,
-    fieldWidth: Dp,
+    cellPx: Float,
+    boardWidthDp: Dp,
+    boardHeightDp: Dp,
     selectedColor: Int,
     fillMode: Boolean,
     isGameOver: Boolean,
@@ -438,11 +497,10 @@ private fun BoardGridCanvas(
 
     Canvas(
         modifier = Modifier
-            .size(fieldWidth)
-            .pointerInput(gridSize, selectedColor, fillMode, isGameOver) {
+            .size(width = boardWidthDp, height = boardHeightDp)
+            .pointerInput(gridWidth, gridHeight, selectedColor, fillMode, isGameOver, cellPx) {
                 if (isGameOver) return@pointerInput
 
-                val px = cellSize.toPx()
                 awaitEachGesture {
                     val down = awaitFirstDown()
                     var lastCell: Pair<Int, Int>? = null
@@ -453,8 +511,8 @@ private fun BoardGridCanvas(
                     fun process(position: Offset) {
                         if (!isCurrentGestureValid || isGameOver) return
 
-                        val rawCol = (position.x / px).toInt().coerceIn(0, gridSize - 1)
-                        val rawRow = (position.y / px).toInt().coerceIn(0, gridSize - 1)
+                        val rawCol = (position.x / cellPx).toInt().coerceIn(0, gridWidth - 1)
+                        val rawRow = (position.y / cellPx).toInt().coerceIn(0, gridHeight - 1)
 
                         if (startCell == null) startCell = rawRow to rawCol
 
@@ -496,7 +554,7 @@ private fun BoardGridCanvas(
 
                                 if (wasEmpty && grid[r][c].color != null) {
                                     soundManager.playCorrect()
-                                    val cellId = r * gridSize + c
+                                    val cellId = r * gridWidth + c
                                     coroutineScope.launch {
                                         val anim = Animatable(0.5f)
                                         cellScales[cellId] = anim
@@ -521,21 +579,19 @@ private fun BoardGridCanvas(
                 }
             }
     ) {
-        val px = cellSize.toPx()
-
-        for (row in 0 until gridSize) {
-            for (col in 0 until gridSize) {
+        for (row in 0 until gridHeight) {
+            for (col in 0 until gridWidth) {
                 val cell = grid[row][col]
-                val x = col * px
-                val y = row * px
+                val x = col * cellPx
+                val y = row * cellPx
 
                 cell.color?.let { colorIdx ->
-                    val cellId = row * gridSize + col
+                    val cellId = row * gridWidth + col
                     val scaleVal = cellScales[cellId]?.value ?: 1f
                     val mainColor = Color(palette[colorIdx])
 
-                    val animatedSize = px * scaleVal
-                    val offset = (px - animatedSize) / 2
+                    val animatedSize = cellPx * scaleVal
+                    val offset = (cellPx - animatedSize) / 2
                     val rectTopLeft = Offset(x + offset, y + offset)
                     val rectSize = Size(animatedSize, animatedSize)
 
@@ -573,11 +629,11 @@ private fun BoardGridCanvas(
                 }
 
                 if (cell.color == null && cell.notes.isNotEmpty()) {
-                    val radius = cellSize.toPx() / 6
+                    val radius = cellPx / 6
 
                     cell.notes.forEachIndexed { i, note ->
-                        val nx = x + (i % 3) * (cellSize.toPx() / 3) + radius
-                        val ny = y + (i / 3) * (cellSize.toPx() / 3) + radius
+                        val nx = x + (i % 3) * (cellPx / 3) + radius
+                        val ny = y + (i / 3) * (cellPx / 3) + radius
 
                         drawCircle(
                             color = Color(palette[note]),
@@ -590,22 +646,22 @@ private fun BoardGridCanvas(
         }
 
         // Grid lines
-        for (i in 0..gridSize) {
-            val stroke = if (i % 5 == 0) 5f else 2f
+        for (col in 0..gridWidth) {
+            val stroke = if (col % 5 == 0) 5f else 2f
             drawLine(
                 color = gridLineColor,
-                start = Offset(i * px, 0f),
-                end = Offset(i * px, gridSize * px),
+                start = Offset(col * cellPx, 0f),
+                end = Offset(col * cellPx, gridHeight * cellPx),
                 strokeWidth = stroke
             )
         }
 
-        for (i in 0..gridSize) {
-            val stroke = if (i % 5 == 0) 5f else 2f
+        for (row in 0..gridHeight) {
+            val stroke = if (row % 5 == 0) 5f else 2f
             drawLine(
                 color = gridLineColor,
-                start = Offset(0f, i * px),
-                end = Offset(gridSize * px, i * px),
+                start = Offset(0f, row * cellPx),
+                end = Offset(gridWidth * cellPx, row * cellPx),
                 strokeWidth = stroke
             )
         }

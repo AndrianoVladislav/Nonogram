@@ -9,14 +9,16 @@ object ImageConverterResize {
     fun resizeToBlocks(
         source: Bitmap,
         maxBlocks: Int = 20,
-        blockSize: Int = 25
+        blockSizeX: Int = 25,
+        blockSizeY: Int = 25
     ): Bitmap {
 
         val (targetW, targetH) = calculateTargetSize(
             source.width,
             source.height,
             maxBlocks,
-            blockSize
+            blockSizeX,
+            blockSizeY
         )
 
         return resizeBilinear(
@@ -30,34 +32,44 @@ object ImageConverterResize {
         originalWidth: Int,
         originalHeight: Int,
         maxBlocks: Int,
-        blockSize: Int
+        blockSizeX: Int,
+        blockSizeY: Int
     ): Pair<Int, Int> {
 
-        val aspectRatio = originalWidth.toFloat() / originalHeight
+        val aspectRatio = if (originalHeight > 0) originalWidth.toFloat() / originalHeight else 1f
 
         var bestW = 1
         var bestH = 1
+        var bestDiff = Float.MAX_VALUE
+        var bestArea = 0
 
         for (h in 1..maxBlocks) {
             for (w in 1..maxBlocks) {
 
-                if (w * h > maxBlocks) continue
+                val area = w * h
+                if (area > maxBlocks) continue
 
-                val ratio = w.toFloat() / h
+                val realW = w * blockSizeX
+                val realH = h * blockSizeY
+                val ratio = realW.toFloat() / realH
+
                 val diff = kotlin.math.abs(ratio - aspectRatio)
 
-                val bestDiff = kotlin.math.abs(bestW.toFloat() / bestH - aspectRatio)
+                val isSignificantlyBetter = diff < bestDiff - 0.02f
+                val isSimilarDiff = kotlin.math.abs(diff - bestDiff) <= 0.02f
 
-                if (diff < bestDiff) {
+                if (isSignificantlyBetter || (isSimilarDiff && area > bestArea)) {
+                    bestDiff = diff
                     bestW = w
                     bestH = h
+                    bestArea = area
                 }
             }
         }
 
         return Pair(
-            bestW * blockSize,
-            bestH * blockSize
+            bestW * blockSizeX,
+            bestH * blockSizeY
         )
     }
 
@@ -76,14 +88,14 @@ object ImageConverterResize {
 
         for (y in 0 until newHeight) {
 
-            val gy = y * (srcHeight - 1).toFloat() / (newHeight - 1)
+            val gy = if (newHeight > 1) y * (srcHeight - 1).toFloat() / (newHeight - 1) else 0f
             val y0 = gy.toInt()
             val y1 = minOf(y0 + 1, srcHeight - 1)
             val dy = gy - y0
 
             for (x in 0 until newWidth) {
 
-                val gx = x * (srcWidth - 1).toFloat() / (newWidth - 1)
+                val gx = if (newWidth > 1) x * (srcWidth - 1).toFloat() / (newWidth - 1) else 0f
                 val x0 = gx.toInt()
                 val x1 = minOf(x0 + 1, srcWidth - 1)
                 val dx = gx - x0

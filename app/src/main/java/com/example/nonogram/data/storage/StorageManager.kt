@@ -79,6 +79,12 @@ class StorageManager(private val context: Context) {
         }
     }
 
+    fun renamePuzzle(id: String, newTitle: String) {
+        val progress = loadProgress(id) ?: PuzzleProgress(puzzleId = id)
+        val updated = progress.copy(title = newTitle)
+        saveProgress(id, updated)
+    }
+
     // --- META SCANNING ---
 
     fun loadMeta(): List<PuzzleItem> {
@@ -94,9 +100,19 @@ class StorageManager(private val context: Context) {
             val totalBlocks = puzzleData.blocks.size
             val isCompleted = currentBlock >= totalBlocks
 
+            val matrixSizeText = if (puzzleData.blocks.isNotEmpty()) {
+                val h = puzzleData.blocks[0].matrix.size
+                val w = if (h > 0) puzzleData.blocks[0].matrix[0].size else 0
+                "${w}×${h}"
+            } else ""
+
+            val title = progress?.title ?: id
+
             result.add(
                 PuzzleItem(
                     id = id,
+                    title = title,
+                    matrixSizeText = matrixSizeText,
                     currentBlock = currentBlock,
                     totalBlocks = totalBlocks,
                     isCompleted = isCompleted
@@ -118,10 +134,13 @@ class StorageManager(private val context: Context) {
 
         val totalBlocks = puzzleData.blocks.size
         val blocksPerSide = sqrt(totalBlocks.toDouble()).toInt().coerceAtLeast(1)
-        val blockSize = puzzleData.blocks[0].matrix.size
 
-        val imageWidth = blocksPerSide * blockSize
-        val imageHeight = ((totalBlocks + blocksPerSide - 1) / blocksPerSide) * blockSize
+        val blockHeight = puzzleData.blocks[0].matrix.size
+        val blockWidth = if (blockHeight > 0) puzzleData.blocks[0].matrix[0].size else 0
+        if (blockWidth == 0 || blockHeight == 0) return
+
+        val imageWidth = blocksPerSide * blockWidth
+        val imageHeight = ((totalBlocks + blocksPerSide - 1) / blocksPerSide) * blockHeight
 
         val bitmap = Bitmap.createBitmap(imageWidth, imageHeight, Bitmap.Config.ARGB_8888)
 
@@ -132,10 +151,10 @@ class StorageManager(private val context: Context) {
 
             val isBlockSolved = bIndex < currentBlockIndex || currentBlockIndex >= totalBlocks
 
-            for (y in 0 until blockSize) {
-                for (x in 0 until blockSize) {
-                    val globalX = bx * blockSize + x
-                    val globalY = by * blockSize + y
+            for (y in 0 until blockHeight) {
+                for (x in 0 until blockWidth) {
+                    val globalX = bx * blockWidth + x
+                    val globalY = by * blockHeight + y
 
                     val color = if (isBlockSolved) {
                         val colorIdx = block.matrix[y][x]

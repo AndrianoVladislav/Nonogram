@@ -23,10 +23,14 @@ class UploadViewModel(
     private val _uiState = MutableStateFlow(UploadUiState())
     val uiState: StateFlow<UploadUiState> = _uiState.asStateFlow()
 
-    fun createPuzzleFromImage(uri: Uri) {
+    fun createPuzzleFromImage(
+        uri: Uri,
+        blockSizeX: Int = 25,
+        blockSizeY: Int = 25
+    ) {
         viewModelScope.launch {
             _uiState.update { it.copy(isProcessing = true, errorMessage = null) }
-            val result = repository.createPuzzleFromImage(uri)
+            val result = repository.createPuzzleFromImage(uri, blockSizeX, blockSizeY)
             result.fold(
                 onSuccess = {
                     _uiState.update { it.copy(isProcessing = false, isSuccess = true) }

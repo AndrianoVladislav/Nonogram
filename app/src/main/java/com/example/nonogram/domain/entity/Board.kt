@@ -5,17 +5,18 @@ import com.example.nonogram.data.storage.Hint
 
 class Board(private val block: Block) {
 
-    val size: Int = block.matrix.size
+    val height: Int = block.matrix.size
+    val width: Int = if (height > 0) block.matrix[0].size else 0
 
-    private var _playerGrid: List<List<PlayerCell>> = List(size) { List(size) { PlayerCell() } }
+    private var _playerGrid: List<List<PlayerCell>> = List(height) { List(width) { PlayerCell() } }
     val playerGrid: List<List<PlayerCell>>
         get() = _playerGrid
 
-    var remainingCells: Int = size * size
+    var remainingCells: Int = height * width
         private set
 
     val rowHints: List<List<Hint>> = block.matrix.map { getRowHints(it) }
-    val colHints: List<List<Hint>> = List(size) { col -> getColumnHints(col) }
+    val colHints: List<List<Hint>> = List(width) { col -> getColumnHints(col) }
 
     fun checkMove(
         row: Int,
@@ -23,6 +24,7 @@ class Board(private val block: Block) {
         selectedColor: Int,
         mode: InputMode
     ): Boolean {
+        if (row !in 0 until height || col !in 0 until width) return false
         val cell = _playerGrid[row][col]
         return cell.color != null || when (mode) {
             InputMode.FILL -> applyFill(cell, row, col, selectedColor)
@@ -97,7 +99,7 @@ class Board(private val block: Block) {
     }
 
     fun getColumnHints(col: Int): List<Hint> {
-        val column: List<Int> = List(block.matrix.size) { y ->
+        val column: List<Int> = List(height) { y ->
             block.matrix[y][col]
         }
         return getRowHints(column)

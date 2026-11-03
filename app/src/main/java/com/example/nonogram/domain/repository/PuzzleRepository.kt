@@ -14,9 +14,14 @@ interface PuzzleRepository {
     suspend fun getBlock(id: String, index: Int): Block?
     suspend fun saveProgress(id: String, progress: PuzzleProgress)
     suspend fun loadProgress(id: String): PuzzleProgress?
+    suspend fun renamePuzzle(id: String, newTitle: String)
     suspend fun getResultImageFile(id: String): File
     suspend fun importPuzzle(uri: Uri): Result<Unit>
     suspend fun exportPuzzle(id: String, outputUri: Uri): Result<Unit>
-    suspend fun createPuzzleFromImage(uri: Uri): Result<Unit>
+    suspend fun createPuzzleFromImage(
+        uri: Uri,
+        blockSizeX: Int = 25,
+        blockSizeY: Int = 25
+    ): Result<Unit>
     suspend fun updateBlockProgressAndGenerateImage(id: String, completedBlockIndex: Int)
 }
